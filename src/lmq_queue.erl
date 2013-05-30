@@ -54,9 +54,11 @@ dequeue() ->
     transaction(F).
 
 complete(UUID) ->
+    Now = lmq_misc:unixtime(),
     F = fun() ->
         [M] = qlc:e(qlc:q([X || X <- mnesia:table(message),
-                           X#message.uuid =:= UUID])),
+                           X#message.uuid =:= UUID,
+                           element(1, X#message.id) >= Now])),
         mnesia:delete(message, M#message.id, write)
     end,
     case mnesia:transaction(F) of
