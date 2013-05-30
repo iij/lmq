@@ -42,9 +42,9 @@ dequeue() ->
                         TS1 = Now + ?DEFAULT_TIMEOUT,
                         UUID1 = case M#message.processing of
                             true -> lmq_misc:uuid();
-                            false -> M#message.uuid
+                            false -> element(2, M#message.id)
                         end,
-                        M1 = M#message{id={TS1, UUID1}, uuid=UUID1, processing=true},
+                        M1 = M#message{id={TS1, UUID1}, processing=true},
                         mnesia:write(message, M1, write),
                         mnesia:delete(message, Key, write),
                         M1
@@ -57,7 +57,7 @@ complete(UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         [M] = qlc:e(qlc:q([X || X <- mnesia:table(message),
-                           X#message.uuid =:= UUID,
+                           element(2, X#message.id) =:= UUID,
                            element(1, X#message.id) >= Now])),
         mnesia:delete(message, M#message.id, write)
     end,
@@ -77,7 +77,7 @@ waittime() ->
 
 new_message(Data) ->
     UUID = lmq_misc:uuid(),
-    #message{id={lmq_misc:unixtime(), UUID}, uuid=UUID, processing=false, data=Data}.
+    #message{id={lmq_misc:unixtime(), UUID}, processing=false, data=Data}.
 
 first() ->
     F = fun() ->

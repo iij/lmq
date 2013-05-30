@@ -1,3 +1,3 @@
--record(message, {id, uuid, processing, data}).
+-record(message, {id, processing, data}).
 
 -define(DEFAULT_TIMEOUT, 30).
