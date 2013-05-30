@@ -17,6 +17,9 @@ pull() ->
 complete(UUID) ->
     gen_server:call(?MODULE, {complete, UUID}).
 
+alive(UUID) ->
+    gen_server:call(?MODULE, {alive, UUID}).
+
 init([]) ->
     lmq_queue:start(),
     {ok, []}.
@@ -35,6 +38,9 @@ handle_call(pull, From, Puller) ->
     end;
 handle_call({complete, UUID}, _From, Puller) ->
     R = lmq_queue:complete(UUID),
+    {reply, R, Puller};
+handle_call({alive, UUID}, _From, Puller) ->
+    R = lmq_queue:reset_timeout(UUID),
     {reply, R, Puller};
 handle_call(stop, _From, Puller) ->
     {stop, normal, ok, Puller}.
