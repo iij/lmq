@@ -35,7 +35,7 @@ dequeue() ->
                 [M] = mnesia:read(message, Key, read),
                 {TS, _} = M#message.id,
                 Now = lmq_misc:unixtime(),
-                case TS >= Now of
+                case TS > Now of
                     true ->
                         empty;
                     false ->
