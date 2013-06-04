@@ -22,6 +22,7 @@ alive(UUID) ->
 
 init([]) ->
     lmq_queue:start(),
+    process_flag(trap_exit, true),
     {ok, []}.
 
 handle_call({push, Data}, _From, Puller) ->
@@ -51,10 +52,18 @@ handle_cast(notify, Puller) ->
     end, Puller),
     {noreply, Puller}.
 
+handle_info({'EXIT', Pid, Reason}, Puller) ->
+    {noreply, Puller -- [Pid]};
+handle_info(Info, Puller) ->
+    io:format("unexpected message received: ~p~n", [Info]),
+    {noreply, Puller}.
+
 terminate(_Reason, _State) ->
     ok.
 
 delay_response(SrvPid, From) ->
+    {Pid, _} = From,
+    link(Pid),
     Timeout = lmq_queue:waittime(),
     receive
         {lmq, SrvPid, wake} -> ok
@@ -63,5 +72,7 @@ delay_response(SrvPid, From) ->
     end,
     case lmq_queue:dequeue() of
         empty -> delay_response(SrvPid, From);
-        Message -> gen_server:reply(From, Message)
+        Message ->
+            unlink(Pid),
+            gen_server:reply(From, Message)
     end.
