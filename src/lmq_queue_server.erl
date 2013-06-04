@@ -1,5 +1,5 @@
 -module(lmq_queue_server).
--behaviours(gen_server).
+-behaviour(gen_server).
 -compile(export_all).
 
 start() ->
