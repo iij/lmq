@@ -22,8 +22,8 @@ start() ->
     mnesia:start().
 
 enqueue(Data) ->
-    Message = new_message(Data),
-    F = fun() -> mnesia:write(message, Message, write) end,
+    M = #message{data=Data},
+    F = fun() -> mnesia:write(message, M, write) end,
     transaction(F).
 
 dequeue() ->
@@ -104,10 +104,6 @@ waittime() ->
             Timeout = round(TS - lmq_misc:unixtime()),
             lists:max([Timeout, 0])
     end.
-
-new_message(Data) ->
-    UUID = lmq_misc:uuid(),
-    #message{id={lmq_misc:unixtime(), UUID}, processing=false, data=Data}.
 
 first() ->
     F = fun() ->
