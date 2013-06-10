@@ -1,15 +1,14 @@
 -module(lmq_queue_server).
 -behaviour(gen_server).
--compile(export_all).
+-export([start_link/0, push/1, pull/0, complete/1, alive/1, return/1, stop/0]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
+-export([test/0]).
 
 -include("lmq.hrl").
 -record(state, {refs=gb_sets:empty(), queue=queue:new()}).
 
-start() ->
+start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
-
-stop() ->
-    gen_server:call(?MODULE, stop).
 
 push(Data) ->
     gen_server:call(?MODULE, {push, Data}).
@@ -25,6 +24,9 @@ alive(UUID) ->
 
 return(UUID) ->
     gen_server:call(?MODULE, {return, UUID}).
+
+stop() ->
+    gen_server:call(?MODULE, stop).
 
 init([]) ->
     lmq_queue:start(),
@@ -79,6 +81,9 @@ handle_info(Msg, S=#state{}) ->
     io:format("Unknown message received: ~p~n", [Msg]),
     {noreply, S}.
 
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
 terminate(_Reason, _State) ->
     ok.
 
@@ -102,7 +107,7 @@ maybe_push_message(S=#state{refs=R, queue=Q}) ->
     end.
 
 test() ->
-    lmq_queue_server:start(),
+    lmq_queue_server:start_link(),
     ok = lmq_queue_server:push("foo"),
     M1 = lmq_queue_server:pull(),
     {_, UUID1} = M1#message.id,
