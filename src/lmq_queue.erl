@@ -6,10 +6,7 @@
 create_table() ->
     mnesia:create_schema([node()|nodes()]),
     mnesia:start(),
-    mnesia:create_table(message, [
-        {type, ordered_set},
-        {attributes, record_info(fields, message)}
-    ]),
+    ok =create(message),
     mnesia:stop().
 
 drop_table() ->
@@ -20,6 +17,18 @@ drop_table() ->
 
 start() ->
     mnesia:start().
+
+create(Name) when is_atom(Name) ->
+    Def = [
+        {type, ordered_set},
+        {attributes, record_info(fields, message)},
+        {record_name, message}
+    ],
+    case mnesia:create_table(Name, Def) of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, Name}} -> ok;
+        Other -> Other
+    end.
 
 enqueue(Data) ->
     M = #message{data=Data},
