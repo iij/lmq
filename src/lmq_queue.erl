@@ -39,15 +39,11 @@ dequeue() ->
                     true ->
                         empty;
                     false ->
-                        TS1 = Now + ?DEFAULT_TIMEOUT,
-                        UUID1 = case M#message.active of
-                            true -> lmq_misc:uuid();
-                            false -> element(2, M#message.id)
-                        end,
-                        M1 = M#message{id={TS1, UUID1}, active=true},
-                        mnesia:write(message, M1, write),
+                        NewId = {Now + ?DEFAULT_TIMEOUT, lmq_misc:uuid()},
+                        NewMsg = M#message{id=NewId, active=true},
+                        mnesia:write(message, NewMsg, write),
                         mnesia:delete(message, Key, write),
-                        M1
+                        NewMsg
                 end
         end
     end,

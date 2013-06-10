@@ -104,8 +104,13 @@ maybe_push_message(S=#state{refs=R, queue=Q}) ->
 test() ->
     lmq_queue_server:start(),
     ok = lmq_queue_server:push("foo"),
-    M = lmq_queue_server:pull(),
-    {_, UUID} = M#message.id,
-    ok = lmq_queue_server:return(UUID),
-    not_found = lmq_queue_server:return(UUID),
+    M1 = lmq_queue_server:pull(),
+    {_, UUID1} = M1#message.id,
+    ok = lmq_queue_server:return(UUID1),
+    not_found = lmq_queue_server:return(UUID1),
+    not_found = lmq_queue_server:complete(UUID1),
+    M2 = lmq_queue_server:pull(),
+    {_, UUID2} = M2#message.id,
+    true = UUID1 =/= UUID2,
+    ok = lmq_queue_server:complete(UUID2),
     ok.
