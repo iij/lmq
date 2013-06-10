@@ -2,6 +2,7 @@
 -behaviour(gen_server).
 -compile(export_all).
 
+-include("lmq.hrl").
 -record(state, {refs=gb_sets:empty(), queue=queue:new()}).
 
 start() ->
@@ -21,6 +22,9 @@ complete(UUID) ->
 
 alive(UUID) ->
     gen_server:call(?MODULE, {alive, UUID}).
+
+return(UUID) ->
+    gen_server:call(?MODULE, {return, UUID}).
 
 init([]) ->
     lmq_queue:start(),
@@ -42,6 +46,9 @@ handle_call({complete, UUID}, _From, S=#state{}) ->
     {reply, R, S};
 handle_call({alive, UUID}, _From, S=#state{}) ->
     R = lmq_queue:reset_timeout(UUID),
+    {reply, R, S};
+handle_call({return, UUID}, _From, S=#state{}) ->
+    R = lmq_queue:return(UUID),
     {reply, R, S};
 handle_call(stop, _From, S=#state{}) ->
     {stop, normal, ok, S}.
@@ -93,3 +100,12 @@ maybe_push_message(S=#state{refs=R, queue=Q}) ->
                     end
             end
     end.
+
+test() ->
+    lmq_queue_server:start(),
+    ok = lmq_queue_server:push("foo"),
+    M = lmq_queue_server:pull(),
+    {_, UUID} = M#message.id,
+    ok = lmq_queue_server:return(UUID),
+    not_found = lmq_queue_server:return(UUID),
+    ok.

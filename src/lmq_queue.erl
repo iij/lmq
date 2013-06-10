@@ -66,6 +66,21 @@ complete(UUID) ->
         _ -> not_found
     end.
 
+return(UUID) ->
+    Now = lmq_misc:unixtime(),
+    F = fun() ->
+        [M] = qlc:e(qlc:q([X || X=#message{id={_, ID}, processing=true}
+                                <- mnesia:table(message),
+                                ID =:= UUID])),
+        NewMsg = M#message{id={Now, UUID}, processing=false},
+        mnesia:delete(message, M#message.id, write),
+        mnesia:write(message, NewMsg, write)
+    end,
+    case mnesia:transaction(F) of
+        {atomic, _} -> ok;
+        _ -> not_found
+    end.
+
 reset_timeout(UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
