@@ -52,9 +52,8 @@ dequeue() ->
 complete(UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        [M] = qlc:e(qlc:q([X || X <- mnesia:table(message),
-                           element(2, X#message.id) =:= UUID,
-                           element(1, X#message.id) >= Now])),
+        [M] = qlc:e(qlc:q([X || X=#message{id={TS, ID}, active=true} <- mnesia:table(message),
+                                ID =:= UUID, TS >= Now])),
         mnesia:delete(message, M#message.id, write)
     end,
     case mnesia:transaction(F) of
@@ -65,12 +64,11 @@ complete(UUID) ->
 return(UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        [M] = qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true}
-                                <- mnesia:table(message),
+        [M] = qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true} <- mnesia:table(message),
                                 ID =:= UUID])),
         NewMsg = M#message{id={Now, UUID}, active=false},
-        mnesia:delete(message, M#message.id, write),
-        mnesia:write(message, NewMsg, write)
+        mnesia:write(message, NewMsg, write),
+        mnesia:delete(message, M#message.id, write)
     end,
     case mnesia:transaction(F) of
         {atomic, _} -> ok;
