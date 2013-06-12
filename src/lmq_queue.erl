@@ -1,53 +1,59 @@
 -module(lmq_queue).
 -behaviour(gen_server).
--export([start_link/0, push/1, pull/0, complete/1, alive/1, return/1, stop/0]).
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
+-export([start_link/1, start_link/2, stop/1,
+    push/2, pull/1, complete/2, alive/2, return/2]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2,
+    code_change/3, terminate/2]).
 
 -include("lmq.hrl").
--record(state, {waiting=queue:new(), monitors=gb_sets:empty()}).
+-record(state, {name, timeout, waiting=queue:new(), monitors=gb_sets:empty()}).
 
-start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link(Name) when is_atom(Name) ->
+    start_link(Name, ?DEFAULT_TIMEOUT).
 
-push(Data) ->
-    gen_server:call(?MODULE, {push, Data}).
+start_link(Name, Timeout) when is_atom(Name), Timeout >= 0 ->
+    gen_server:start_link({local, Name}, ?MODULE, [Name, Timeout], []).
 
-pull() ->
-    gen_server:call(?MODULE, pull, infinity).
+push(Name, Data) ->
+    gen_server:call(Name, {push, Data}).
 
-complete(UUID) ->
-    gen_server:call(?MODULE, {complete, UUID}).
+pull(Name) ->
+    gen_server:call(Name, pull, infinity).
 
-alive(UUID) ->
-    gen_server:call(?MODULE, {alive, UUID}).
+complete(Name, UUID) ->
+    gen_server:call(Name, {complete, UUID}).
 
-return(UUID) ->
-    gen_server:call(?MODULE, {return, UUID}).
+alive(Name, UUID) ->
+    gen_server:call(Name, {alive, UUID}).
 
-stop() ->
-    gen_server:call(?MODULE, stop).
+return(Name, UUID) ->
+    gen_server:call(Name, {return, UUID}).
 
-init([]) ->
+stop(Name) ->
+    gen_server:call(Name, stop).
+
+init([Name, Timeout]) ->
     process_flag(trap_exit, true),
-    {ok, #state{}}.
+    ok = lmq_lib:create(Name),
+    {ok, #state{name=Name, timeout=Timeout}}.
 
-handle_call({push, Data}, _From, S=#state{}) ->
-    R = lmq_lib:enqueue(Data),
+handle_call({push, Data}, _From, S=#state{name=Name}) ->
+    R = lmq_lib:enqueue(Name, Data),
     case queue:is_empty(S#state.waiting) of
         true  -> {reply, R, S};
-        false -> {reply, R, S, lmq_lib:waittime()}
+        false -> {reply, R, S, lmq_lib:waittime(Name)}
     end;
 handle_call(pull, From={Pid, _}, S=#state{}) ->
     Ref = erlang:monitor(process, Pid),
     Waiting = queue:in({From, Ref}, S#state.waiting),
     Monitors = gb_sets:add(Ref, S#state.monitors),
-    {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime()};
-handle_call({complete, UUID}, _From, State) ->
-    {reply, lmq_lib:complete(UUID), State};
-handle_call({alive, UUID}, _From, State) ->
-    {reply, lmq_lib:reset_timeout(UUID), State};
-handle_call({return, UUID}, _From, State) ->
-    {reply, lmq_lib:return(UUID), State};
+    {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
+handle_call({complete, UUID}, _From, S=#state{}) ->
+    {reply, lmq_lib:complete(S#state.name, UUID), S};
+handle_call({alive, UUID}, _From, S=#state{}) ->
+    {reply, lmq_lib:reset_timeout(S#state.name, UUID), S};
+handle_call({return, UUID}, _From, S=#state{}) ->
+    {reply, lmq_lib:return(S#state.name, UUID), S};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
@@ -59,7 +65,7 @@ handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
     case queue:is_empty(NewState#state.waiting) of
         true  -> {noreply, NewState};
-        false -> {noreply, NewState, lmq_lib:waittime()}
+        false -> {noreply, NewState, lmq_lib:waittime(S#state.name)}
     end;
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
     case gb_sets:is_member(Ref, M) of
@@ -87,7 +93,7 @@ maybe_push_message(S=#state{waiting=Waiting}) ->
     case queue:is_empty(Waiting) of
         true -> S;
         false ->
-            case lmq_lib:dequeue() of
+            case lmq_lib:dequeue(S#state.name) of
                 empty -> S;
                 Msg ->
                     case queue:out(Waiting) of
