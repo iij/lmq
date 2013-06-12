@@ -17,4 +17,4 @@ distclean: clean
 	$(REBAR) delete-deps
 
 test:
-	$(REBAR) skip_deps=true compile ct
+	$(REBAR) skip_deps=true compile eunit ct
