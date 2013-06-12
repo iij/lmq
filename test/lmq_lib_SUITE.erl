@@ -17,6 +17,7 @@ init_per_suite(Config) ->
 
 end_per_suite(_Config) ->
     application:stop(mnesia),
+    mnesia:delete_schema([node()]),
     ok.
 
 create(_Config) ->

@@ -2,7 +2,6 @@
 -behaviour(gen_server).
 -export([start_link/0, push/1, pull/0, complete/1, alive/1, return/1, stop/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
--export([test/0]).
 
 -include("lmq.hrl").
 -record(state, {refs=gb_sets:empty(), queue=queue:new()}).
@@ -104,18 +103,3 @@ maybe_push_message(S=#state{refs=R, queue=Q}) ->
                     end
             end
     end.
-
-test() ->
-    application:start(mnesia),
-    lmq_queue:start_link(),
-    ok = lmq_queue:push("foo"),
-    M1 = lmq_queue:pull(),
-    {_, UUID1} = M1#message.id,
-    ok = lmq_queue:return(UUID1),
-    not_found = lmq_queue:return(UUID1),
-    not_found = lmq_queue:complete(UUID1),
-    M2 = lmq_queue:pull(),
-    {_, UUID2} = M2#message.id,
-    true = UUID1 =/= UUID2,
-    ok = lmq_queue:complete(UUID2),
-    ok.
