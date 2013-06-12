@@ -1,22 +1,8 @@
--module(lmq_queue).
+-module(lmq_lib).
+
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 -compile(export_all).
-
-create_table() ->
-    mnesia:create_schema([node()|nodes()]),
-    mnesia:start(),
-    ok =create(message),
-    mnesia:stop().
-
-drop_table() ->
-    mnesia:start(),
-    mnesia:delete_table(message),
-    mnesia:stop(),
-    mnesia:delete_schema([node()|nodes()]).
-
-start() ->
-    mnesia:start().
 
 create(Name) when is_atom(Name) ->
     Def = [

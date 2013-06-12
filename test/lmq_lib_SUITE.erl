@@ -1,4 +1,4 @@
--module(lmq_queue_SUITE).
+-module(lmq_lib_SUITE).
 
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, all/0]).
@@ -20,6 +20,6 @@ end_per_suite(_Config) ->
     ok.
 
 create(_Config) ->
-    ok = lmq_queue:create(test),
+    ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
-    ok = lmq_queue:create(test).
+    ok = lmq_lib:create(test).
