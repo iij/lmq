@@ -1,6 +1,6 @@
 REBAR = $(shell pwd)/rebar
 
-.PHONY: deps
+.PHONY: deps test
 
 all: deps compile
 
@@ -15,3 +15,6 @@ clean:
 
 distclean: clean
 	$(REBAR) delete-deps
+
+test:
+	$(REBAR) skip_deps=true compile ct
