@@ -4,7 +4,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, code_change/3, terminate/2]).
 
 -include("lmq.hrl").
--record(state, {refs=gb_sets:empty(), queue=queue:new()}).
+-record(state, {waiting=queue:new(), monitors=gb_sets:empty()}).
 
 start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
@@ -33,51 +33,49 @@ init([]) ->
 
 handle_call({push, Data}, _From, S=#state{}) ->
     R = lmq_lib:enqueue(Data),
-    case queue:is_empty(S#state.queue) of
+    case queue:is_empty(S#state.waiting) of
         true  -> {reply, R, S};
         false -> {reply, R, S, lmq_lib:waittime()}
     end;
-handle_call(pull, From={Pid, _}, S=#state{refs=R, queue=Q}) ->
+handle_call(pull, From={Pid, _}, S=#state{}) ->
     Ref = erlang:monitor(process, Pid),
-    NewState = S#state{refs=gb_sets:add(Ref, R), queue=queue:in({From, Ref}, Q)},
-    {noreply, NewState, lmq_lib:waittime()};
-handle_call({complete, UUID}, _From, S=#state{}) ->
-    R = lmq_lib:complete(UUID),
-    {reply, R, S};
-handle_call({alive, UUID}, _From, S=#state{}) ->
-    R = lmq_lib:reset_timeout(UUID),
-    {reply, R, S};
-handle_call({return, UUID}, _From, S=#state{}) ->
-    R = lmq_lib:return(UUID),
-    {reply, R, S};
-handle_call(stop, _From, S=#state{}) ->
-    {stop, normal, ok, S}.
+    Waiting = queue:in({From, Ref}, S#state.waiting),
+    Monitors = gb_sets:add(Ref, S#state.monitors),
+    {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime()};
+handle_call({complete, UUID}, _From, State) ->
+    {reply, lmq_lib:complete(UUID), State};
+handle_call({alive, UUID}, _From, State) ->
+    {reply, lmq_lib:reset_timeout(UUID), State};
+handle_call({return, UUID}, _From, State) ->
+    {reply, lmq_lib:return(UUID), State};
+handle_call(stop, _From, State) ->
+    {stop, normal, ok, State}.
 
-handle_cast(Msg, S=#state{}) ->
+handle_cast(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
-    {noreply, S}.
+    {noreply, State}.
 
 handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
-    case queue:is_empty(NewState#state.queue) of
+    case queue:is_empty(NewState#state.waiting) of
         true  -> {noreply, NewState};
         false -> {noreply, NewState, lmq_lib:waittime()}
     end;
-handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{refs=R, queue=Q}) ->
-    case gb_sets:is_member(Ref, R) of
+handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
+    case gb_sets:is_member(Ref, M) of
         true ->
             erlang:demonitor(Ref, [flush]),
-            NewQueue = queue:filter(
+            Waiting = queue:filter(
                 fun({_, V}) when V =:= Ref -> false;
                    (_) -> true
-                end, Q),
-            {noreply, S#state{refs=gb_sets:delete(Ref, R), queue=NewQueue}};
+                end, S#state.waiting),
+            {noreply, S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)}};
         false ->
             {noreply, S}
     end;
-handle_info(Msg, S=#state{}) ->
+handle_info(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
-    {noreply, S}.
+    {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -85,20 +83,20 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(_Reason, _State) ->
     ok.
 
-maybe_push_message(S=#state{refs=R, queue=Q}) ->
-    case queue:is_empty(Q) of
+maybe_push_message(S=#state{waiting=Waiting}) ->
+    case queue:is_empty(Waiting) of
         true -> S;
         false ->
             case lmq_lib:dequeue() of
                 empty -> S;
                 Msg ->
-                    case queue:out(Q) of
-                        {{value, {From, Ref}}, NewQueue} ->
+                    case queue:out(Waiting) of
+                        {{value, {From, Ref}}, NewWaiting} ->
                             erlang:demonitor(Ref, [flush]),
-                            NewRefs = gb_sets:delete(Ref, R),
+                            Monitors = gb_sets:delete(Ref, S#state.monitors),
                             gen_server:reply(From, Msg),
-                            S#state{refs=NewRefs, queue=NewQueue};
-                        {empty, Q} ->
+                            S#state{waiting=NewWaiting, monitors=Monitors};
+                        {empty, Waiting} ->
                             S
                     end
             end
