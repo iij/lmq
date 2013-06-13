@@ -33,7 +33,6 @@ stop(Name) ->
     gen_server:call(Name, stop).
 
 init([Name, Timeout]) ->
-    process_flag(trap_exit, true),
     ok = lmq_lib:create(Name),
     {ok, #state{name=Name, timeout=Timeout}}.
 
