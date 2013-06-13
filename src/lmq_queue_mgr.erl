@@ -1,7 +1,7 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/1, create/1]).
+-export([start_link/1, create/1, find/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -10,7 +10,7 @@
                permanent, 10000,
                supervisor, [lmq_queue_sup]}).
 
--record(state, {sup}).
+-record(state, {sup, qmap=dict:new()}).
 
 start_link(Sup) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [Sup], []).
@@ -20,15 +20,29 @@ create(Name) when is_list(Name) ->
 create(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {create, Name}).
 
+find(Name) when is_list(Name) ->
+    find(list_to_atom(Name));
+find(Name) when is_atom(Name) ->
+    gen_server:call(?MODULE, {find, Name}).
+
 init([Sup]) ->
     %% start queue supervisor later in order to avoid deadlock
     self() ! {start_queue_supervisor, Sup},
     {ok, #state{}}.
 
-handle_call({create, Name}, _From, S=#state{}) ->
+handle_call({create, Name}, _From, S=#state{qmap=M}) when is_atom(Name) ->
     ok = lmq_lib:create(Name),
-    R = supervisor:start_child(S#state.sup, [Name]),
-    {reply, R, S}.
+    {ok, Pid} = supervisor:start_child(S#state.sup, [Name]),
+    {reply, ok, S#state{qmap=dict:store(Name, Pid, M)}};
+handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
+    R = case dict:find(Name, S#state.qmap) of
+        {ok, Pid} -> Pid;
+        error -> not_found
+    end,
+    {reply, R, S};
+handle_call(Msg, _From, State) ->
+    io:format("Unknown message: ~p~n", [Msg]),
+    {noreply, State}.
 
 handle_cast(_, State) ->
     {noreply, State}.

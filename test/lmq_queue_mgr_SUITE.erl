@@ -30,8 +30,10 @@ end_per_testcase(_, _Config) ->
     ok.
 
 creation(_Config) ->
-    {ok, Q1} = lmq_queue_mgr:create("q1"),
-    {ok, Q2} = lmq_queue_mgr:create(q2),
+    ok = lmq_queue_mgr:create("q1"),
+    ok = lmq_queue_mgr:create(q2),
+    Q1 = lmq_queue_mgr:find("q1"),
+    Q2 = lmq_queue_mgr:find(q2),
     R1 = make_ref(), R2 = make_ref(),
     lmq_queue:push(Q1, R1),
     lmq_queue:push(Q2, R2),
