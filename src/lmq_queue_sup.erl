@@ -13,7 +13,7 @@ init([]) ->
     {ok, {{simple_one_for_one, MaxRestart, MaxTime},
           [{lmq_queue,
            {lmq_queue, start_link, []},
-           temporary,
+           transient,
            5000,
            worker,
            [lmq_queue]}]}}.

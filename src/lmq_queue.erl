@@ -34,6 +34,7 @@ stop(Pid) ->
 
 init([Name, Timeout]) ->
     ok = lmq_lib:create(Name),
+    lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, timeout=Timeout}}.
 
 handle_call({push, Data}, _From, S=#state{name=Name}) ->
