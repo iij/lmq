@@ -119,5 +119,6 @@ select(Q) ->
 transaction(F) ->
     case mnesia:transaction(F) of
         {atomic, Val} -> Val;
+        {aborted, {no_exists, _}} -> {error, no_queue_exists};
         {aborted, Reason} -> {error, Reason}
     end.

@@ -57,8 +57,8 @@ reset_timeout(Config) ->
 
 error_case(_Config) ->
     Name = '__abcdefg__',
-    {error, {no_exists, _}} = lmq_lib:enqueue(Name, make_ref()),
-    {error, {no_exists, _}} = lmq_lib:dequeue(Name),
-    {error, {no_exists, _}} = lmq_lib:complete(Name, "AAA"),
-    {error, {no_exists, _}} = lmq_lib:return(Name, "AAA"),
-    {error, {no_exists, _}} = lmq_lib:reset_timeout(Name, "AAA").
+    {error, no_queue_exists} = lmq_lib:enqueue(Name, make_ref()),
+    {error, no_queue_exists} = lmq_lib:dequeue(Name),
+    {error, no_queue_exists} = lmq_lib:complete(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:return(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:reset_timeout(Name, "AAA").
