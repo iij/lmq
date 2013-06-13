@@ -12,25 +12,25 @@ start_link(Name) when is_atom(Name) ->
     start_link(Name, ?DEFAULT_TIMEOUT).
 
 start_link(Name, Timeout) when is_atom(Name), Timeout >= 0 ->
-    gen_server:start_link({local, Name}, ?MODULE, [Name, Timeout], []).
+    gen_server:start_link(?MODULE, [Name, Timeout], []).
 
-push(Name, Data) ->
-    gen_server:call(Name, {push, Data}).
+push(Pid, Data) ->
+    gen_server:call(Pid, {push, Data}).
 
-pull(Name) ->
-    gen_server:call(Name, pull, infinity).
+pull(Pid) ->
+    gen_server:call(Pid, pull, infinity).
 
-complete(Name, UUID) ->
-    gen_server:call(Name, {complete, UUID}).
+complete(Pid, UUID) ->
+    gen_server:call(Pid, {complete, UUID}).
 
-alive(Name, UUID) ->
-    gen_server:call(Name, {alive, UUID}).
+alive(Pid, UUID) ->
+    gen_server:call(Pid, {alive, UUID}).
 
-return(Name, UUID) ->
-    gen_server:call(Name, {return, UUID}).
+return(Pid, UUID) ->
+    gen_server:call(Pid, {return, UUID}).
 
-stop(Name) ->
-    gen_server:call(Name, stop).
+stop(Pid) ->
+    gen_server:call(Pid, stop).
 
 init([Name, Timeout]) ->
     ok = lmq_lib:create(Name),

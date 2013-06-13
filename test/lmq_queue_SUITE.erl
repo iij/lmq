@@ -23,53 +23,51 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(_, Config) ->
-    Name = message,
-    {ok, _} = lmq_queue:start_link(Name),
-    [{qname, Name} | Config].
+    {ok, Pid} = lmq_queue:start_link(message),
+    [{queue, Pid} | Config].
 
 end_per_testcase(_, Config) ->
-    lmq_queue:stop(?config(qname, Config)).
+    lmq_queue:stop(?config(queue, Config)).
 
 push_pull_complete(Config) ->
-    Name = ?config(qname, Config),
+    Pid = ?config(queue, Config),
     Ref = make_ref(),
-    ok = lmq_queue:push(Name, Ref),
-    M = lmq_queue:pull(Name),
+    ok = lmq_queue:push(Pid, Ref),
+    M = lmq_queue:pull(Pid),
     {TS, UUID} = M#message.id,
     true = is_float(TS),
     uuid:string_to_uuid(UUID),
     Ref = M#message.data,
-    ok = lmq_queue:complete(Name, UUID).
+    ok = lmq_queue:complete(Pid, UUID).
 
 return_to(Config) ->
-    Name = ?config(qname, Config),
+    Pid = ?config(queue, Config),
     Ref = make_ref(),
-    ok = lmq_queue:push(Name, Ref),
-    M1 = lmq_queue:pull(Name),
+    ok = lmq_queue:push(Pid, Ref),
+    M1 = lmq_queue:pull(Pid),
     Ref = M1#message.data,
     {_, UUID1} = M1#message.id,
-    ok = lmq_queue:return(Name, UUID1),
-    not_found = lmq_queue:return(Name, UUID1),
-    not_found = lmq_queue:complete(Name, UUID1),
-    M2 = lmq_queue:pull(Name),
+    ok = lmq_queue:return(Pid, UUID1),
+    not_found = lmq_queue:return(Pid, UUID1),
+    not_found = lmq_queue:complete(Pid, UUID1),
+    M2 = lmq_queue:pull(Pid),
     Ref = M2#message.data,
     {_, UUID2} = M2#message.id,
     true = UUID1 =/= UUID2,
-    ok = lmq_queue:complete(Name, UUID2).
+    ok = lmq_queue:complete(Pid, UUID2).
 
 multi_queue(Config) ->
-    Name1 = ?config(qname, Config),
-    Name2 = for_test,
-    {ok, _} = lmq_queue:start_link(Name2),
+    Q1 = ?config(queue, Config),
+    {ok, Q2} = lmq_queue:start_link(for_test),
     Ref1 = make_ref(),
     Ref2 = make_ref(),
-    ok = lmq_queue:push(Name1, Ref1),
-    ok = lmq_queue:push(Name2, Ref2),
-    M2 = lmq_queue:pull(Name2), Ref2 = M2#message.data,
-    M1 = lmq_queue:pull(Name1), Ref1 = M1#message.data,
-    ok = lmq_queue:complete(Name1, element(2, M1#message.id)),
-    ok = lmq_queue:alive(Name2, element(2, M2#message.id)),
-    ok = lmq_queue:return(Name2, element(2, M2#message.id)),
-    M3 = lmq_queue:pull(Name2),
-    ok = lmq_queue:complete(Name2, element(2, M3#message.id)),
-    ok = lmq_queue:stop(Name2).
+    ok = lmq_queue:push(Q1, Ref1),
+    ok = lmq_queue:push(Q2, Ref2),
+    M2 = lmq_queue:pull(Q2), Ref2 = M2#message.data,
+    M1 = lmq_queue:pull(Q1), Ref1 = M1#message.data,
+    ok = lmq_queue:complete(Q1, element(2, M1#message.id)),
+    ok = lmq_queue:alive(Q2, element(2, M2#message.id)),
+    ok = lmq_queue:return(Q2, element(2, M2#message.id)),
+    M3 = lmq_queue:pull(Q2),
+    ok = lmq_queue:complete(Q2, element(2, M3#message.id)),
+    ok = lmq_queue:stop(Q2).
