@@ -47,43 +47,46 @@ dequeue(Name) ->
 complete(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        [M] = qlc:e(qlc:q([X || X=#message{id={TS, ID}, active=true} <- mnesia:table(Name),
-                                ID =:= UUID, TS >= Now])),
-        mnesia:delete(Name, M#message.id, write)
+        case qlc:e(qlc:q([X || X=#message{id={TS, ID}, active=true} <- mnesia:table(Name),
+                               ID =:= UUID, TS >= Now])) of
+            [M] ->
+                mnesia:delete(Name, M#message.id, write);
+            [] ->
+                not_found
+        end
     end,
-    case mnesia:transaction(F) of
-        {atomic, _} -> ok;
-        _ -> not_found
-    end.
+    transaction(F).
 
 return(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        [M] = qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true} <- mnesia:table(Name),
-                                ID =:= UUID])),
-        NewMsg = M#message{id={Now, UUID}, active=false},
-        mnesia:write(Name, NewMsg, write),
-        mnesia:delete(Name, M#message.id, write)
+        case qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true} <- mnesia:table(Name),
+                               ID =:= UUID])) of
+            [M] ->
+                NewMsg = M#message{id={Now, UUID}, active=false},
+                mnesia:write(Name, NewMsg, write),
+                mnesia:delete(Name, M#message.id, write);
+            [] ->
+                not_found
+        end
     end,
-    case mnesia:transaction(F) of
-        {atomic, _} -> ok;
-        _ -> not_found
-    end.
+    transaction(F).
 
 reset_timeout(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        [M] = qlc:e(qlc:q([X || X <- mnesia:table(Name),
-                           element(2, X#message.id) =:= UUID,
-                           element(1, X#message.id) >= Now])),
-        M1 = M#message{id={Now + ?DEFAULT_TIMEOUT, UUID}},
-        mnesia:write(Name, M1, write),
-        mnesia:delete(Name, M#message.id, write)
+        case qlc:e(qlc:q([X || X <- mnesia:table(Name),
+                               element(2, X#message.id) =:= UUID,
+                               element(1, X#message.id) >= Now])) of
+            [M] ->
+                M1 = M#message{id={Now + ?DEFAULT_TIMEOUT, UUID}},
+                mnesia:write(Name, M1, write),
+                mnesia:delete(Name, M#message.id, write);
+            [] ->
+                not_found
+        end
     end,
-    case mnesia:transaction(F) of
-        {atomic, _} -> ok;
-        _ -> not_found
-    end.
+    transaction(F).
 
 waittime(Name) ->
     case first(Name) of
@@ -114,5 +117,7 @@ select(Q) ->
     Val.
 
 transaction(F) ->
-    {atomic, Val} = mnesia:transaction(F),
-    Val.
+    case mnesia:transaction(F) of
+        {atomic, Val} -> Val;
+        {aborted, Reason} -> {error, Reason}
+    end.
