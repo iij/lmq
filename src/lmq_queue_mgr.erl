@@ -1,7 +1,7 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/1, create/1, find/1]).
+-export([start_link/1, create/1, find/1, match/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -25,6 +25,9 @@ find(Name) when is_list(Name) ->
 find(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {find, Name}).
 
+match(Regexp) when is_list(Regexp) ->
+    gen_server:call(?MODULE, {match, Regexp}).
+
 init([Sup]) ->
     %% start queue supervisor later in order to avoid deadlock
     self() ! {start_queue_supervisor, Sup},
@@ -38,6 +41,19 @@ handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of
         {ok, Pid} -> Pid;
         error -> not_found
+    end,
+    {reply, R, S};
+handle_call({match, Regexp}, _From, S=#state{}) ->
+    R = case re:compile(Regexp) of
+        {ok, MP} ->
+            dict:fold(fun(Key, Val, Acc) ->
+                case re:run(atom_to_list(Key), MP) of
+                    {match, _} -> [Val | Acc];
+                    _ -> Acc
+                end
+            end, [], S#state.qmap);
+        {error, _} ->
+            {error, invalid_regexp}
     end,
     {reply, R, S};
 handle_call(Msg, _From, State) ->

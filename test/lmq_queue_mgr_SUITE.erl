@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1]).
+-export([creation/1, match/1]).
 
 all() ->
-    [creation].
+    [creation, match].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -41,3 +41,15 @@ creation(_Config) ->
     M1 = lmq_queue:pull(Q1),
     R1 = M1#message.data,
     R2 = M2#message.data.
+
+match(_Config) ->
+    ok = lmq_queue_mgr:create("foo/bar"),
+    ok = lmq_queue_mgr:create("foo"),
+    ok = lmq_queue_mgr:create("foo/baz"),
+    Q1 = lmq_queue_mgr:find('foo/bar'),
+    Q2 = lmq_queue_mgr:find('foo/baz'),
+    R = lmq_queue_mgr:match("^foo/.*"),
+    true = lists:sort([Q1, Q2]) =:= lists:sort(R),
+    %% error case
+    [] = lmq_queue_mgr:match("AAA"),
+    {error, invalid_regexp} = lmq_queue_mgr:match("a[1-").
