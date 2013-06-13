@@ -2,11 +2,12 @@
 
 -include("lmq.hrl").
 -include_lib("common_test/include/ct.hrl").
--export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, all/0]).
--export([create/1, complete/1, return/1, reset_timeout/1, error_case/1]).
+-export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
+    all/0]).
+-export([create/1, complete/1, return/1, reset_timeout/1, waittime/1, error_case/1]).
 
 all() ->
-    [create, complete, return, reset_timeout, error_case].
+    [create, complete, return, reset_timeout, waittime, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -25,9 +26,11 @@ init_per_testcase(create, Config) ->
     Config;
 init_per_testcase(_, Config) ->
     Name = test,
-    ok = lmq_lib:enqueue(Name, make_ref()),
     lmq_lib:create(Name),
     [{qname, Name} | Config].
+
+end_per_testcase(_, Config) ->
+    {atomic, ok} = mnesia:delete_table(?config(qname, Config)).
 
 create(_Config) ->
     ok = lmq_lib:create(test),
@@ -36,6 +39,7 @@ create(_Config) ->
 
 complete(Config) ->
     Name = ?config(qname, Config),
+    ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
     ok = lmq_lib:complete(Name, UUID),
@@ -43,6 +47,7 @@ complete(Config) ->
 
 return(Config) ->
     Name = ?config(qname, Config),
+    ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
     ok = lmq_lib:return(Name, UUID),
@@ -50,10 +55,20 @@ return(Config) ->
 
 reset_timeout(Config) ->
     Name = ?config(qname, Config),
+    ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
     ok = lmq_lib:reset_timeout(Name, UUID),
     not_found = lmq_lib:reset_timeout(Name, "AAA").
+
+waittime(Config) ->
+    Name = ?config(qname, Config),
+    empty =lmq_lib:first(Name),
+    infinity = lmq_lib:waittime(Name),
+    ok = lmq_lib:enqueue(Name, make_ref()),
+    0 = lmq_lib:waittime(Name),
+    lmq_lib:dequeue(Name),
+    true = 0 < lmq_lib:waittime(Name).
 
 error_case(_Config) ->
     Name = '__abcdefg__',
@@ -61,4 +76,5 @@ error_case(_Config) ->
     {error, no_queue_exists} = lmq_lib:dequeue(Name),
     {error, no_queue_exists} = lmq_lib:complete(Name, "AAA"),
     {error, no_queue_exists} = lmq_lib:return(Name, "AAA"),
-    {error, no_queue_exists} = lmq_lib:reset_timeout(Name, "AAA").
+    {error, no_queue_exists} = lmq_lib:reset_timeout(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:waittime(Name).

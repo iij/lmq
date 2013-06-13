@@ -90,6 +90,7 @@ reset_timeout(Name, UUID) ->
 
 waittime(Name) ->
     case first(Name) of
+        {error, _}=E -> E;
         empty -> infinity;
         Message ->
             {TS, _} = Message#message.id,
