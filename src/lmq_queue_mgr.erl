@@ -35,20 +35,20 @@ init([Sup]) ->
 
 handle_call({create, Name}, _From, S=#state{qmap=M}) when is_atom(Name) ->
     ok = lmq_lib:create(Name),
-    {ok, Pid} = supervisor:start_child(S#state.sup, [Name]),
-    {reply, ok, S#state{qmap=dict:store(Name, Pid, M)}};
+    Value = start_queue(S#state.sup, Name),
+    {reply, ok, S#state{qmap=dict:store(Name, Value, M)}};
 handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of
-        {ok, Pid} -> Pid;
+        {ok, {Pid, _}} -> Pid;
         error -> not_found
     end,
     {reply, R, S};
 handle_call({match, Regexp}, _From, S=#state{}) ->
     R = case re:compile(Regexp) of
         {ok, MP} ->
-            dict:fold(fun(Key, Val, Acc) ->
+            dict:fold(fun(Key, {Pid, _}, Acc) ->
                 case re:run(atom_to_list(Key), MP) of
-                    {match, _} -> [Val | Acc];
+                    {match, _} -> [Pid | Acc];
                     _ -> Acc
                 end
             end, [], S#state.qmap);
@@ -66,6 +66,15 @@ handle_cast(_, State) ->
 handle_info({start_queue_supervisor, Sup}, S=#state{}) ->
     {ok, Pid} = supervisor:start_child(Sup, ?SPEC),
     {noreply, S#state{sup=Pid}};
+handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
+    [Name] = dict:fold(fun(Key, {_, R}, Acc) ->
+        case R =:= Ref of
+            true -> [Key];
+            false -> Acc
+        end
+    end, [], QMap),
+    Value = start_queue(S#state.sup, Name),
+    {noreply, S#state{qmap=dict:store(Name, Value, QMap)}};
 handle_info(Msg, State) ->
     io:format("Unknown message: ~p~n", [Msg]),
     {noreply, State}.
@@ -75,3 +84,8 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+start_queue(Sup, Name) ->
+    {ok, Pid} = supervisor:start_child(Sup, [Name]),
+    Ref = erlang:monitor(process, Pid),
+    {Pid, Ref}.

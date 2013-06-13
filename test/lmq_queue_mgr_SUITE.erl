@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1, match/1]).
+-export([creation/1, match/1, restart_queue/1]).
 
 all() ->
-    [creation, match].
+    [creation, match, restart_queue].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -53,3 +53,11 @@ match(_Config) ->
     %% error case
     [] = lmq_queue_mgr:match("AAA"),
     {error, invalid_regexp} = lmq_queue_mgr:match("a[1-").
+
+restart_queue(_Config) ->
+    ok = lmq_queue_mgr:create(test),
+    Q1 = lmq_queue_mgr:find(test),
+    exit(Q1, kill),
+    timer:sleep(50), % sleep until DOWN message handled
+    Q2 = lmq_queue_mgr:find(test),
+    true = Q1 =/= Q2.
