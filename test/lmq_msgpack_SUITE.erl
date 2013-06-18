@@ -9,23 +9,29 @@ all() ->
     [push_pull_complete].
 
 init_per_suite(Config) ->
+    Priv = ?config(priv_dir, Config),
+    application:set_env(mnesia, dir, Priv),
+    lmq:install([node()]),
     lmq:start(),
     Config.
 
 end_per_suite(_Config) ->
-    lmq:stop().
+    lmq:stop(),
+    mnesia:delete_schema([node()]).
 
 init_per_testcase(_, Config) ->
     {ok, Pid} = msgpack_rpc_client:connect(tcp, "localhost", 18800, []),
-    [{client, Pid} | Config].
+    [{client, Pid}, {qname, <<"msgpack_test">>} | Config].
 
 end_per_testcase(_, Config) ->
     Client = ?config(client, Config),
-    msgpack_rpc_client:close(Client).
+    Name = ?config(qname, Config),
+    msgpack_rpc_client:close(Client),
+    mnesia:delete_table(binary_to_atom(Name, latin1)).
 
 push_pull_complete(Config) ->
     Client = ?config(client, Config),
-    Name = <<"msgpack_test">>,
+    Name = ?config(qname, Config),
     Content = <<"test data">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
