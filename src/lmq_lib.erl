@@ -123,3 +123,21 @@ transaction(F) ->
         {aborted, {no_exists, _}} -> {error, no_queue_exists};
         {aborted, Reason} -> {error, Reason}
     end.
+
+export_message(M=#message{}) ->
+    {_, UUID} = M#message.id,
+    UUID1 = list_to_binary(UUID),
+    {[{<<"id">>, UUID1}, {<<"content">>, M#message.data}]}.
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+export_message_test() ->
+    Ref = make_ref(),
+    M = #message{data=Ref},
+    {_, UUID} = M#message.id,
+    UUID1 = list_to_binary(UUID),
+    ?assertEqual({[{<<"id">>, UUID1}, {<<"content">>, Ref}]}, export_message(M)).
+
+-endif.

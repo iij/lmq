@@ -28,4 +28,7 @@ push_pull_complete(Config) ->
     Name = <<"msgpack_test">>,
     Content = <<"test data">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]).
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
+    {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
+    {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, complete, [Name, UUID]).
