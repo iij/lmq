@@ -3,10 +3,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_complete/1]).
+-export([push_pull_complete/1, release/1]).
 
 all() ->
-    [push_pull_complete].
+    [push_pull_complete, release].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -37,4 +37,19 @@ push_pull_complete(Config) ->
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, retain, [Name, UUID]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, complete, [Name, UUID]).
+
+release(Config) ->
+    Client = ?config(client, Config),
+    Name = ?config(qname, Config),
+    Content = <<"test data 2">>,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
+    {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
+    {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, release, [Name, UUID]),
+    {error, _} = msgpack_rpc_client:call(Client, complete, [Name, UUID]),
+    {ok, Res1} = msgpack_rpc_client:call(Client, pull, [Name]),
+    {[{<<"id">>, UUID1}, {<<"content">>, Content}]} = Res1,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, complete, [Name, UUID1]).
