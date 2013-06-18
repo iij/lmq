@@ -6,8 +6,11 @@
   {applications, [
                   kernel,
                   stdlib,
-                  mnesia
+                  mnesia,
+                  ranch
                  ]},
   {mod, { lmq_app, []}},
-  {env, []}
+  {env, [
+    {port, 18800}
+  ]}
  ]}.
