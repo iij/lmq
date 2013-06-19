@@ -6,8 +6,11 @@
   {applications, [
                   kernel,
                   stdlib,
+                  uuid,
                   mnesia,
-                  ranch
+                  ranch,
+                  msgpack,
+                  msgpack_rpc
                  ]},
   {mod, { lmq_app, []}},
   {env, [
