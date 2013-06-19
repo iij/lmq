@@ -1,6 +1,6 @@
 REBAR = $(shell pwd)/rebar
 
-.PHONY: deps test
+.PHONY: deps test rel
 
 all: deps compile
 
@@ -18,3 +18,8 @@ distclean: clean
 
 test: all
 	$(REBAR) skip_deps=true eunit ct
+
+generate:
+	$(REBAR) generate
+
+rel: deps compile generate

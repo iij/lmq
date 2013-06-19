@@ -4,3 +4,4 @@ logs
 *.beam
 Mnesia.*
 .eunit
+rel/lmq
