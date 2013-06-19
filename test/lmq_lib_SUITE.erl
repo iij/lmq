@@ -30,7 +30,7 @@ init_per_testcase(_, Config) ->
     [{qname, Name} | Config].
 
 end_per_testcase(_, Config) ->
-    {atomic, ok} = mnesia:delete_table(?config(qname, Config)).
+    mnesia:delete_table(?config(qname, Config)).
 
 create(_Config) ->
     ok = lmq_lib:create(test),
