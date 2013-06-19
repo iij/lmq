@@ -36,7 +36,8 @@ push_pull_complete(Config) ->
     M = lmq_queue:pull(Pid),
     {TS, UUID} = M#message.id,
     true = is_float(TS),
-    uuid:string_to_uuid(UUID),
+    true = is_binary(UUID),
+    uuid:uuid_to_string(UUID),
     Ref = M#message.data,
     ok = lmq_queue:complete(Pid, UUID).
 

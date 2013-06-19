@@ -34,7 +34,7 @@ dequeue(Name) ->
                     true ->
                         empty;
                     false ->
-                        NewId = {Now + ?DEFAULT_TIMEOUT, lmq_misc:uuid()},
+                        NewId = {Now + ?DEFAULT_TIMEOUT, uuid:get_v4()},
                         NewMsg = M#message{id=NewId, active=true},
                         mnesia:write(Name, NewMsg, write),
                         mnesia:delete(Name, Key, write),
@@ -126,7 +126,7 @@ transaction(F) ->
 
 export_message(M=#message{}) ->
     {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(UUID),
+    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
     {[{<<"id">>, UUID1}, {<<"content">>, M#message.data}]}.
 
 
@@ -137,7 +137,7 @@ export_message_test() ->
     Ref = make_ref(),
     M = #message{data=Ref},
     {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(UUID),
+    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
     ?assertEqual({[{<<"id">>, UUID1}, {<<"content">>, Ref}]}, export_message(M)).
 
 -endif.

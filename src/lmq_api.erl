@@ -19,7 +19,7 @@ pull(Name) when is_binary(Name) ->
 
 complete(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     Pid = find(Name),
-    UUID1 = binary_to_list(UUID),
+    UUID1 = convert_uuid(UUID),
     case lmq_queue:complete(Pid, UUID1) of
         ok -> <<"ok">>;
         not_found -> throw(not_found)
@@ -27,7 +27,7 @@ complete(Name, UUID) when is_binary(Name), is_binary(UUID) ->
 
 retain(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     Pid = find(Name),
-    UUID1 = binary_to_list(UUID),
+    UUID1 = convert_uuid(UUID),
     case lmq_queue:alive(Pid, UUID1) of
         ok -> <<"ok">>;
         not_found -> throw(not_found)
@@ -35,7 +35,7 @@ retain(Name, UUID) when is_binary(Name), is_binary(UUID) ->
 
 release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     Pid = find(Name),
-    UUID1 = binary_to_list(UUID),
+    UUID1 = convert_uuid(UUID),
     case lmq_queue:return(Pid, UUID1) of
         ok -> <<"ok">>;
         not_found -> throw(not_found)
@@ -47,3 +47,6 @@ find(Name) when is_binary(Name) ->
         not_found -> throw(queue_not_found);
         Pid -> Pid
     end.
+
+convert_uuid(UUID) when is_binary(UUID) ->
+    uuid:string_to_uuid(binary_to_list(UUID)).
