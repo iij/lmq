@@ -1,6 +1,6 @@
 -module(lmq_api).
 
--export([create/1, push/2, pull/1, complete/2, retain/2, release/2]).
+-export([create/1, push/2, pull/1, done/2, retain/2, release/2]).
 
 create(Name) when is_binary(Name) ->
     Name1 = binary_to_atom(Name, latin1),
@@ -17,7 +17,7 @@ pull(Name) when is_binary(Name) ->
     M = lmq_queue:pull(Pid),
     lmq_lib:export_message(M).
 
-complete(Name, UUID) when is_binary(Name), is_binary(UUID) ->
+done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     Pid = find(Name),
     UUID1 = convert_uuid(UUID),
     case lmq_queue:complete(Pid, UUID1) of
