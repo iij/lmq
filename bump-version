@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+if [ $# -ne 1 ]; then
+    echo "usage: $0 VERSION"
+    exit 1
+fi
+
+sed -i .bak -e "s/{vsn, \".*\"}/{vsn, \"$1\"}/" src/lmq.app.src
+rm src/lmq.app.src.bak
+
+sed -i .bak -e "s/{rel, \"lmq\", \".*\"/{rel, \"lmq\", \"$1\"/" rel/reltool.config
+rm rel/reltool.config.bak
+
+echo Files updated successfully, version bumped to $1
+exit 0
