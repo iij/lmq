@@ -1,0 +1,8 @@
+deps
+ebin
+log
+logs
+*.beam
+Mnesia.*
+.eunit
+rel/lmq

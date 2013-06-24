@@ -1,0 +1,25 @@
+{application, lmq,
+ [
+  {description, ""},
+  {vsn, "0.1.0"},
+  {registered, []},
+  {applications, [
+                  kernel,
+                  stdlib,
+                  lager,
+                  uuid,
+                  mnesia,
+                  ranch,
+                  msgpack,
+                  msgpack_rpc
+                 ]},
+  {mod, { lmq_app, []}},
+  {env, [
+    {port, 18800},
+    {lager, [
+      {handlers, [
+        {lager_console_backend, debug}
+      ]}
+    ]}
+  ]}
+ ]}.

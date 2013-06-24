@@ -1,0 +1,4 @@
+lists:foreach(fun(Path) ->
+    code:add_patha(filename:join(Path, "ebin"))
+end, filelib:wildcard("./deps/*")).
+code:add_patha("./ebin").
