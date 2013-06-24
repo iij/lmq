@@ -2,7 +2,8 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--compile(export_all).
+-export([create/1, enqueue/2, dequeue/1, done/2, retain/2, release/2,
+    first/1, waittime/1, export_message/1]).
 
 create(Name) when is_atom(Name) ->
     Def = [
@@ -108,14 +109,6 @@ first(Name) ->
         end
     end,
     transaction(F).
-
-get_all() ->
-    select(qlc:q([X || X <- mnesia:table(message)])).
-
-select(Q) ->
-    F = fun() -> qlc:e(Q) end,
-    {atomic, Val} = mnesia:transaction(F),
-    Val.
 
 transaction(F) ->
     case mnesia:transaction(F) of
