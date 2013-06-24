@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([push_pull_complete/1, return_to/1, multi_queue/1]).
+-export([push_pull_done/1, release/1, multi_queue/1]).
 
 all() ->
-    [push_pull_complete, return_to, multi_queue].
+    [push_pull_done, release, multi_queue].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -29,7 +29,7 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
     lmq_queue:stop(?config(queue, Config)).
 
-push_pull_complete(Config) ->
+push_pull_done(Config) ->
     Pid = ?config(queue, Config),
     Ref = make_ref(),
     ok = lmq_queue:push(Pid, Ref),
@@ -39,23 +39,23 @@ push_pull_complete(Config) ->
     true = is_binary(UUID),
     uuid:uuid_to_string(UUID),
     Ref = M#message.data,
-    ok = lmq_queue:complete(Pid, UUID).
+    ok = lmq_queue:done(Pid, UUID).
 
-return_to(Config) ->
+release(Config) ->
     Pid = ?config(queue, Config),
     Ref = make_ref(),
     ok = lmq_queue:push(Pid, Ref),
     M1 = lmq_queue:pull(Pid),
     Ref = M1#message.data,
     {_, UUID1} = M1#message.id,
-    ok = lmq_queue:return(Pid, UUID1),
-    not_found = lmq_queue:return(Pid, UUID1),
-    not_found = lmq_queue:complete(Pid, UUID1),
+    ok = lmq_queue:release(Pid, UUID1),
+    not_found = lmq_queue:release(Pid, UUID1),
+    not_found = lmq_queue:done(Pid, UUID1),
     M2 = lmq_queue:pull(Pid),
     Ref = M2#message.data,
     {_, UUID2} = M2#message.id,
     true = UUID1 =/= UUID2,
-    ok = lmq_queue:complete(Pid, UUID2).
+    ok = lmq_queue:done(Pid, UUID2).
 
 multi_queue(Config) ->
     Q1 = ?config(queue, Config),
@@ -66,9 +66,9 @@ multi_queue(Config) ->
     ok = lmq_queue:push(Q2, Ref2),
     M2 = lmq_queue:pull(Q2), Ref2 = M2#message.data,
     M1 = lmq_queue:pull(Q1), Ref1 = M1#message.data,
-    ok = lmq_queue:complete(Q1, element(2, M1#message.id)),
-    ok = lmq_queue:alive(Q2, element(2, M2#message.id)),
-    ok = lmq_queue:return(Q2, element(2, M2#message.id)),
+    ok = lmq_queue:done(Q1, element(2, M1#message.id)),
+    ok = lmq_queue:retain(Q2, element(2, M2#message.id)),
+    ok = lmq_queue:release(Q2, element(2, M2#message.id)),
     M3 = lmq_queue:pull(Q2),
-    ok = lmq_queue:complete(Q2, element(2, M3#message.id)),
+    ok = lmq_queue:done(Q2, element(2, M3#message.id)),
     ok = lmq_queue:stop(Q2).

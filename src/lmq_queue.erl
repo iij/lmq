@@ -1,7 +1,7 @@
 -module(lmq_queue).
 -behaviour(gen_server).
 -export([start_link/1, start_link/2, stop/1,
-    push/2, pull/1, complete/2, alive/2, return/2]).
+    push/2, pull/1, done/2, retain/2, release/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -20,14 +20,14 @@ push(Pid, Data) ->
 pull(Pid) ->
     gen_server:call(Pid, pull, infinity).
 
-complete(Pid, UUID) ->
-    gen_server:call(Pid, {complete, UUID}).
+done(Pid, UUID) ->
+    gen_server:call(Pid, {done, UUID}).
 
-alive(Pid, UUID) ->
-    gen_server:call(Pid, {alive, UUID}).
+retain(Pid, UUID) ->
+    gen_server:call(Pid, {retain, UUID}).
 
-return(Pid, UUID) ->
-    gen_server:call(Pid, {return, UUID}).
+release(Pid, UUID) ->
+    gen_server:call(Pid, {release, UUID}).
 
 stop(Pid) ->
     gen_server:call(Pid, stop).
@@ -48,11 +48,11 @@ handle_call(pull, From={Pid, _}, S=#state{}) ->
     Waiting = queue:in({From, Ref}, S#state.waiting),
     Monitors = gb_sets:add(Ref, S#state.monitors),
     {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
-handle_call({complete, UUID}, _From, S=#state{}) ->
+handle_call({done, UUID}, _From, S=#state{}) ->
     {reply, lmq_lib:complete(S#state.name, UUID), S};
-handle_call({alive, UUID}, _From, S=#state{}) ->
+handle_call({retain, UUID}, _From, S=#state{}) ->
     {reply, lmq_lib:reset_timeout(S#state.name, UUID), S};
-handle_call({return, UUID}, _From, S=#state{}) ->
+handle_call({release, UUID}, _From, S=#state{}) ->
     {reply, lmq_lib:return(S#state.name, UUID), S};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
