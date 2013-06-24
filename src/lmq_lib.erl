@@ -44,7 +44,7 @@ dequeue(Name) ->
     end,
     transaction(F).
 
-complete(Name, UUID) ->
+done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         case qlc:e(qlc:q([X || X=#message{id={TS, ID}, active=true} <- mnesia:table(Name),
@@ -57,7 +57,7 @@ complete(Name, UUID) ->
     end,
     transaction(F).
 
-return(Name, UUID) ->
+release(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         case qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true} <- mnesia:table(Name),
@@ -72,7 +72,7 @@ return(Name, UUID) ->
     end,
     transaction(F).
 
-reset_timeout(Name, UUID) ->
+retain(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         case qlc:e(qlc:q([X || X <- mnesia:table(Name),

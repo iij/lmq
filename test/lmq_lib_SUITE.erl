@@ -4,10 +4,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create/1, complete/1, return/1, reset_timeout/1, waittime/1, error_case/1]).
+-export([create/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
 
 all() ->
-    [create, complete, return, reset_timeout, waittime, error_case].
+    [create, done, release, retain, waittime, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -37,29 +37,29 @@ create(_Config) ->
     message = mnesia:table_info(test, record_name),
     ok = lmq_lib:create(test).
 
-complete(Config) ->
+done(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
-    ok = lmq_lib:complete(Name, UUID),
-    not_found = lmq_lib:complete(Name, UUID).
+    ok = lmq_lib:done(Name, UUID),
+    not_found = lmq_lib:done(Name, UUID).
 
-return(Config) ->
+release(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
-    ok = lmq_lib:return(Name, UUID),
-    not_found = lmq_lib:return(Name, UUID).
+    ok = lmq_lib:release(Name, UUID),
+    not_found = lmq_lib:release(Name, UUID).
 
-reset_timeout(Config) ->
+retain(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
     M = lmq_lib:dequeue(Name),
     {_, UUID} = M#message.id,
-    ok = lmq_lib:reset_timeout(Name, UUID),
-    not_found = lmq_lib:reset_timeout(Name, "AAA").
+    ok = lmq_lib:retain(Name, UUID),
+    not_found = lmq_lib:retain(Name, "AAA").
 
 waittime(Config) ->
     Name = ?config(qname, Config),
@@ -74,7 +74,7 @@ error_case(_Config) ->
     Name = '__abcdefg__',
     {error, no_queue_exists} = lmq_lib:enqueue(Name, make_ref()),
     {error, no_queue_exists} = lmq_lib:dequeue(Name),
-    {error, no_queue_exists} = lmq_lib:complete(Name, "AAA"),
-    {error, no_queue_exists} = lmq_lib:return(Name, "AAA"),
-    {error, no_queue_exists} = lmq_lib:reset_timeout(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:done(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:release(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:retain(Name, "AAA"),
     {error, no_queue_exists} = lmq_lib:waittime(Name).

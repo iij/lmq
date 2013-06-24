@@ -49,11 +49,11 @@ handle_call(pull, From={Pid, _}, S=#state{}) ->
     Monitors = gb_sets:add(Ref, S#state.monitors),
     {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
 handle_call({done, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:complete(S#state.name, UUID), S};
+    {reply, lmq_lib:done(S#state.name, UUID), S};
 handle_call({retain, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:reset_timeout(S#state.name, UUID), S};
+    {reply, lmq_lib:retain(S#state.name, UUID), S};
 handle_call({release, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:return(S#state.name, UUID), S};
+    {reply, lmq_lib:release(S#state.name, UUID), S};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
