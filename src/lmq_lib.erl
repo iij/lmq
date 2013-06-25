@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--export([create/1, enqueue/2, dequeue/1, done/2, retain/2, release/2,
+-export([create/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
     first/1, waittime/1, export_message/1]).
 
 create(Name) when is_atom(Name) ->
@@ -22,7 +22,7 @@ enqueue(Name, Data) ->
     F = fun() -> mnesia:write(Name, M, write) end,
     transaction(F).
 
-dequeue(Name) ->
+dequeue(Name, Timeout) ->
     F = fun() ->
         case mnesia:first(Name) of
             '$end_of_table' ->
@@ -35,7 +35,7 @@ dequeue(Name) ->
                     true ->
                         empty;
                     false ->
-                        NewId = {Now + ?DEFAULT_TIMEOUT, uuid:get_v4()},
+                        NewId = {Now + Timeout, uuid:get_v4()},
                         NewMsg = M#message{id=NewId, active=true},
                         mnesia:write(Name, NewMsg, write),
                         mnesia:delete(Name, Key, write),
@@ -73,14 +73,14 @@ release(Name, UUID) ->
     end,
     transaction(F).
 
-retain(Name, UUID) ->
+retain(Name, UUID, Timeout) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         case qlc:e(qlc:q([X || X <- mnesia:table(Name),
                                element(2, X#message.id) =:= UUID,
                                element(1, X#message.id) >= Now])) of
             [M] ->
-                M1 = M#message{id={Now + ?DEFAULT_TIMEOUT, UUID}},
+                M1 = M#message{id={Now + Timeout, UUID}},
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
             [] ->

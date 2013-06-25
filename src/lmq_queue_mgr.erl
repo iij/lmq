@@ -38,7 +38,7 @@ init([Sup]) ->
 
 handle_call({create, Name}, _From, S=#state{}) when is_atom(Name) ->
     ok = lmq_lib:create(Name),
-    {ok, _} = supervisor:start_child(S#state.sup, [Name, self()]),
+    {ok, _} = supervisor:start_child(S#state.sup, [Name]),
     {reply, ok, S};
 handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of

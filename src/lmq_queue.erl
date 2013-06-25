@@ -6,13 +6,13 @@
     code_change/3, terminate/2]).
 
 -include("lmq.hrl").
--record(state, {name, timeout, waiting=queue:new(), monitors=gb_sets:empty()}).
+-record(state, {name, props, waiting=queue:new(), monitors=gb_sets:empty()}).
 
 start_link(Name) when is_atom(Name) ->
-    start_link(Name, ?DEFAULT_TIMEOUT).
+    start_link(Name, ?DEFAULT_QUEUE_PROPS).
 
-start_link(Name, Timeout) when is_atom(Name), Timeout >= 0 ->
-    gen_server:start_link(?MODULE, [Name, Timeout], []).
+start_link(Name, Props) when is_atom(Name) ->
+    gen_server:start_link(?MODULE, {Name, Props}, []).
 
 push(Pid, Data) ->
     gen_server:call(Pid, {push, Data}).
@@ -32,10 +32,10 @@ release(Pid, UUID) ->
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
-init([Name, Timeout]) ->
+init({Name, Props}) ->
     ok = lmq_lib:create(Name),
     lmq_queue_mgr:queue_started(Name, self()),
-    {ok, #state{name=Name, timeout=Timeout}}.
+    {ok, #state{name=Name, props=Props}}.
 
 handle_call({push, Data}, _From, S=#state{name=Name}) ->
     R = lmq_lib:enqueue(Name, Data),
@@ -50,8 +50,8 @@ handle_call(pull, From={Pid, _}, S=#state{}) ->
     {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
 handle_call({done, UUID}, _From, S=#state{}) ->
     {reply, lmq_lib:done(S#state.name, UUID), S};
-handle_call({retain, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:retain(S#state.name, UUID), S};
+handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
+    {reply, lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)), S};
 handle_call({release, UUID}, _From, S=#state{}) ->
     {reply, lmq_lib:release(S#state.name, UUID), S};
 handle_call(stop, _From, State) ->
@@ -89,11 +89,11 @@ code_change(_OldVsn, State, _Extra) ->
 terminate(_Reason, _State) ->
     ok.
 
-maybe_push_message(S=#state{waiting=Waiting}) ->
+maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
     case queue:is_empty(Waiting) of
         true -> S;
         false ->
-            case lmq_lib:dequeue(S#state.name) of
+            case lmq_lib:dequeue(S#state.name, proplists:get_value(timeout, Props)) of
                 empty -> S;
                 Msg ->
                     case queue:out(Waiting) of

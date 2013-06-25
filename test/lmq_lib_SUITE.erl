@@ -40,15 +40,17 @@ create(_Config) ->
 done(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
-    M = lmq_lib:dequeue(Name),
-    {_, UUID} = M#message.id,
+    Now = lmq_misc:unixtime(),
+    M = lmq_lib:dequeue(Name, 10),
+    {TS, UUID} = M#message.id,
+    true = Now < TS andalso TS - Now - 10 < 1,
     ok = lmq_lib:done(Name, UUID),
     not_found = lmq_lib:done(Name, UUID).
 
 release(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
-    M = lmq_lib:dequeue(Name),
+    M = lmq_lib:dequeue(Name, 30),
     {_, UUID} = M#message.id,
     ok = lmq_lib:release(Name, UUID),
     not_found = lmq_lib:release(Name, UUID).
@@ -56,10 +58,12 @@ release(Config) ->
 retain(Config) ->
     Name = ?config(qname, Config),
     ok = lmq_lib:enqueue(Name, make_ref()),
-    M = lmq_lib:dequeue(Name),
-    {_, UUID} = M#message.id,
-    ok = lmq_lib:retain(Name, UUID),
-    not_found = lmq_lib:retain(Name, "AAA").
+    Now = lmq_misc:unixtime(),
+    M = lmq_lib:dequeue(Name, 15),
+    {TS, UUID} = M#message.id,
+    true = Now < TS andalso TS - Now - 15 < 1,
+    ok = lmq_lib:retain(Name, UUID, 30),
+    not_found = lmq_lib:retain(Name, "AAA", 30).
 
 waittime(Config) ->
     Name = ?config(qname, Config),
@@ -67,14 +71,14 @@ waittime(Config) ->
     infinity = lmq_lib:waittime(Name),
     ok = lmq_lib:enqueue(Name, make_ref()),
     0 = lmq_lib:waittime(Name),
-    lmq_lib:dequeue(Name),
+    lmq_lib:dequeue(Name, 30),
     true = 0 < lmq_lib:waittime(Name).
 
 error_case(_Config) ->
     Name = '__abcdefg__',
     {error, no_queue_exists} = lmq_lib:enqueue(Name, make_ref()),
-    {error, no_queue_exists} = lmq_lib:dequeue(Name),
+    {error, no_queue_exists} = lmq_lib:dequeue(Name, 30),
     {error, no_queue_exists} = lmq_lib:done(Name, "AAA"),
     {error, no_queue_exists} = lmq_lib:release(Name, "AAA"),
-    {error, no_queue_exists} = lmq_lib:retain(Name, "AAA"),
+    {error, no_queue_exists} = lmq_lib:retain(Name, "AAA", 30),
     {error, no_queue_exists} = lmq_lib:waittime(Name).
