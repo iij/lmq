@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([push_pull_done/1, release/1, multi_queue/1]).
+-export([push_pull_done/1, release/1, multi_queue/1, pull_timeout/1]).
 
 all() ->
-    [push_pull_done, release, multi_queue].
+    [push_pull_done, release, multi_queue, pull_timeout].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -72,3 +72,13 @@ multi_queue(Config) ->
     M3 = lmq_queue:pull(Q2),
     ok = lmq_queue:done(Q2, element(2, M3#message.id)),
     ok = lmq_queue:stop(Q2).
+
+pull_timeout(_Config) ->
+    {ok, Q} = lmq_queue:start_link(pull_timeout, [{timeout, 0.3}]),
+    Ref = make_ref(),
+    ok = lmq_queue:push(Q, Ref),
+    M1 = lmq_queue:pull(Q), Ref = M1#message.data,
+    M2 = lmq_queue:pull(Q), Ref = M2#message.data,
+    true = M1 =/= M2,
+    empty = lmq_queue:pull(Q, 0.2),
+    M3 = lmq_queue:pull(Q, 0.2), Ref = M3#message.data.

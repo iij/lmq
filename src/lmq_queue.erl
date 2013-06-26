@@ -1,7 +1,7 @@
 -module(lmq_queue).
 -behaviour(gen_server).
 -export([start_link/1, start_link/2, stop/1,
-    push/2, pull/1, done/2, retain/2, release/2]).
+    push/2, pull/1, pull/2, done/2, retain/2, release/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -18,7 +18,14 @@ push(Pid, Data) ->
     gen_server:call(Pid, {push, Data}).
 
 pull(Pid) ->
-    gen_server:call(Pid, pull, infinity).
+    gen_server:call(Pid, {pull, infinity}, infinity).
+
+pull(Pid, Timeout) ->
+    try gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
+        R -> R
+    catch
+        exit:{timeout, _} -> empty
+    end.
 
 done(Pid, UUID) ->
     gen_server:call(Pid, {done, UUID}).
@@ -43,9 +50,13 @@ handle_call({push, Data}, _From, S=#state{name=Name}) ->
         true  -> {reply, R, S};
         false -> {reply, R, S, lmq_lib:waittime(Name)}
     end;
-handle_call(pull, From={Pid, _}, S=#state{}) ->
+handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
+    ExpireAt = case Timeout of
+        infinity -> infinity;
+        _ -> lmq_misc:unixtime() + Timeout
+    end,
     Ref = erlang:monitor(process, Pid),
-    Waiting = queue:in({From, Ref}, S#state.waiting),
+    Waiting = queue:in({From, ExpireAt, Ref}, S#state.waiting),
     Monitors = gb_sets:add(Ref, S#state.monitors),
     {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
 handle_call({done, UUID}, _From, S=#state{}) ->
@@ -72,7 +83,7 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
         true ->
             erlang:demonitor(Ref, [flush]),
             Waiting = queue:filter(
-                fun({_, V}) when V =:= Ref -> false;
+                fun({_, _, V}) when V =:= Ref -> false;
                    (_) -> true
                 end, S#state.waiting),
             {noreply, S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)}};
@@ -90,20 +101,21 @@ terminate(_Reason, _State) ->
     ok.
 
 maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
-    case queue:is_empty(Waiting) of
-        true -> S;
-        false ->
-            case lmq_lib:dequeue(S#state.name, proplists:get_value(timeout, Props)) of
-                empty -> S;
+    case queue:out(Waiting) of
+        {{value, {From, ExpireAt, Ref}}, NewWaiting} ->
+            Timeout = proplists:get_value(timeout, Props),
+            case ExpireAt > lmq_misc:unixtime() andalso
+                    lmq_lib:dequeue(S#state.name, Timeout) of
+                false -> %% client timeout
+                    maybe_push_message(S#state{waiting=NewWaiting});
+                empty ->
+                    S;
                 Msg ->
-                    case queue:out(Waiting) of
-                        {{value, {From, Ref}}, NewWaiting} ->
-                            erlang:demonitor(Ref, [flush]),
-                            Monitors = gb_sets:delete(Ref, S#state.monitors),
-                            gen_server:reply(From, Msg),
-                            S#state{waiting=NewWaiting, monitors=Monitors};
-                        {empty, Waiting} ->
-                            S
-                    end
-            end
+                    erlang:demonitor(Ref, [flush]),
+                    Monitors = gb_sets:delete(Ref, S#state.monitors),
+                    gen_server:reply(From, Msg),
+                    S#state{waiting=NewWaiting, monitors=Monitors}
+            end;
+        {empty, Waiting} ->
+            S
     end.
