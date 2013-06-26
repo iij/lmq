@@ -36,10 +36,16 @@ init([Sup]) ->
     self() ! {start_queue_supervisor, Sup},
     {ok, #state{}}.
 
-handle_call({create, Name}, _From, S=#state{}) when is_atom(Name) ->
-    ok = lmq_lib:create(Name),
-    {ok, _} = supervisor:start_child(S#state.sup, [Name]),
-    {reply, ok, S};
+handle_call({create, Name}, _From, S=#state{qmap=QMap}) when is_atom(Name) ->
+    case dict:is_key(Name, QMap) of
+        true ->
+            {reply, ok, S};
+        false ->
+            ok = lmq_lib:create(Name),
+            NewQMap = dict:store(Name, undefined, S#state.qmap),
+            {ok, _} = supervisor:start_child(S#state.sup, [Name]),
+            {reply, ok, S#state{qmap=NewQMap}}
+    end;
 handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} -> Pid;

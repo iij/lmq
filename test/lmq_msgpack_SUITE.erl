@@ -25,9 +25,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     Client = ?config(client, Config),
-    Name = ?config(qname, Config),
-    msgpack_rpc_client:close(Client),
-    mnesia:delete_table(binary_to_atom(Name, latin1)).
+    msgpack_rpc_client:close(Client).
 
 push_pull_done(Config) ->
     Client = ?config(client, Config),
