@@ -1,7 +1,7 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/1, queue_started/2, create/1, find/1, match/1]).
+-export([start_link/1, queue_started/2, create/1, delete/1, find/1, match/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -31,6 +31,11 @@ find(Name) when is_atom(Name) ->
 match(Regexp) when is_list(Regexp) ->
     gen_server:call(?MODULE, {match, Regexp}).
 
+delete(Name) when is_list(Name) ->
+    delete(list_to_atom(Name));
+delete(Name) when is_atom(Name) ->
+    gen_server:call(?MODULE, {delete, Name}).
+
 init([Sup]) ->
     %% start queue supervisor later in order to avoid deadlock
     self() ! {start_queue_supervisor, Sup},
@@ -46,6 +51,16 @@ handle_call({create, Name}, _From, S=#state{qmap=QMap}) when is_atom(Name) ->
             {ok, _} = supervisor:start_child(S#state.sup, [Name]),
             {reply, ok, S#state{qmap=NewQMap}}
     end;
+handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
+    State = case dict:find(Name, S#state.qmap) of
+        {ok, {Pid, _}} ->
+            supervisor:terminate_child(S#state.sup, Pid),
+            S#state{qmap=dict:erase(Name, S#state.qmap)};
+        error ->
+            S
+    end,
+    ok = lmq_lib:delete(Name),
+    {reply, ok, State};
 handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} -> Pid;

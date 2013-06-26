@@ -25,7 +25,9 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     Client = ?config(client, Config),
-    msgpack_rpc_client:close(Client).
+    Name = ?config(qname, Config),
+    msgpack_rpc_client:close(Client),
+    lmq_queue_mgr:delete(binary_to_atom(Name, latin1)).
 
 push_pull_done(Config) ->
     Client = ?config(client, Config),

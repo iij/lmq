@@ -4,10 +4,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
+-export([create_delete/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
 
 all() ->
-    [create, done, release, retain, waittime, error_case].
+    [create_delete, done, release, retain, waittime, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -22,7 +22,7 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]),
     ok.
 
-init_per_testcase(create, Config) ->
+init_per_testcase(create_delete, Config) ->
     Config;
 init_per_testcase(_, Config) ->
     Name = test,
@@ -30,12 +30,15 @@ init_per_testcase(_, Config) ->
     [{qname, Name} | Config].
 
 end_per_testcase(_, Config) ->
-    mnesia:delete_table(?config(qname, Config)).
+    ok = lmq_lib:delete(?config(qname, Config)).
 
-create(_Config) ->
+create_delete(_Config) ->
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
-    ok = lmq_lib:create(test).
+    ok = lmq_lib:create(test),
+    ok = lmq_lib:delete(test),
+    {aborted, {no_exists, _}} = mnesia:delete_table(test),
+    ok = lmq_lib:delete(test).
 
 done(Config) ->
     Name = ?config(qname, Config),

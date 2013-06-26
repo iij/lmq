@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--export([create/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
+-export([create/1, delete/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
     first/1, waittime/1, export_message/1]).
 
 create(Name) when is_atom(Name) ->
@@ -14,6 +14,13 @@ create(Name) when is_atom(Name) ->
     case mnesia:create_table(Name, Def) of
         {atomic, ok} -> ok;
         {aborted, {already_exists, Name}} -> ok;
+        Other -> Other
+    end.
+
+delete(Name) when is_atom(Name) ->
+    case mnesia:delete_table(Name) of
+        {atomic, ok} -> ok;
+        {aborted, {no_exists, Name}} -> ok;
         Other -> Other
     end.
 
