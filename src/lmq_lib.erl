@@ -2,26 +2,58 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--export([create/1, delete/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
+-export([create_admin_table/0, queue_info/1, create/1,
+    create/2, delete/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
     first/1, waittime/1, export_message/1]).
 
+create_admin_table() ->
+    case mnesia:create_table(?QUEUE_INFO_TABLE, ?QUEUE_INFO_TABLE_DEFS) of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, ?QUEUE_INFO_TABLE}} -> ok;
+        Other ->
+            lager:error("Failed to create admin table: ~p", [Other])
+    end.
+
+queue_info(Name) when is_atom(Name) ->
+    F = fun() ->
+        case qlc:e(qlc:q([P || #queue_info{name=N, props=P}
+                               <- mnesia:table(?QUEUE_INFO_TABLE),
+                               N =:= Name])) of
+            [P] -> P;
+            [] -> not_found
+        end
+    end,
+    transaction(F).
+
 create(Name) when is_atom(Name) ->
+    create(Name, ?DEFAULT_QUEUE_PROPS).
+
+create(Name, Props) when is_atom(Name) ->
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
         {record_name, message}
     ],
+    Info = #queue_info{name=Name, props=Props},
+    F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
+
     case mnesia:create_table(Name, Def) of
-        {atomic, ok} -> ok;
-        {aborted, {already_exists, Name}} -> ok;
-        Other -> Other
+        {atomic, ok} ->
+            ok = transaction(F);
+        {aborted, {already_exists, Name}} ->
+            ok = transaction(F);
+        Other ->
+            lager:error("Failed to create table '~p': ~p", [Name, Other])
     end.
 
 delete(Name) when is_atom(Name) ->
+    F = fun() -> mnesia:delete(?QUEUE_INFO_TABLE, Name, write) end,
+    transaction(F),
     case mnesia:delete_table(Name) of
         {atomic, ok} -> ok;
         {aborted, {no_exists, Name}} -> ok;
-        Other -> Other
+        Other ->
+            lagger:error("Failed to delete table '~p': ~p", [Name, Other])
     end.
 
 enqueue(Name, Data) ->

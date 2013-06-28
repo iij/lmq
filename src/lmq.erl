@@ -9,7 +9,7 @@
 install(Nodes) ->
     ok = mnesia:create_schema(Nodes),
     rpc:multicall(Nodes, application, start, [mnesia]),
-    %% TODO: create admin table here
+    ok = lmq_lib:create_admin_table(),
     rpc:multicall(Nodes, application, stop, [mnesia]).
 
 start() ->

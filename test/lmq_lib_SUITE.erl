@@ -35,9 +35,12 @@ end_per_testcase(_, Config) ->
 create_delete(_Config) ->
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
-    ok = lmq_lib:create(test),
+    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(test),
+    ok = lmq_lib:create(test, [{timeout, 10}]),
+    [{timeout, 10}] = lmq_lib:queue_info(test),
     ok = lmq_lib:delete(test),
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
+    not_found = lmq_lib:queue_info(test),
     ok = lmq_lib:delete(test).
 
 done(Config) ->
