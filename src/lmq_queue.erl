@@ -9,10 +9,16 @@
 -record(state, {name, props, waiting=queue:new(), monitors=gb_sets:empty()}).
 
 start_link(Name) when is_atom(Name) ->
-    start_link(Name, ?DEFAULT_QUEUE_PROPS).
+    case lmq_lib:queue_info(Name) of
+        not_found ->
+            start_link(Name, ?DEFAULT_QUEUE_PROPS);
+        _ ->
+            gen_server:start_link(?MODULE, Name, [])
+    end.
 
 start_link(Name, Props) when is_atom(Name) ->
-    gen_server:start_link(?MODULE, {Name, Props}, []).
+    ok = lmq_lib:create(Name, Props),
+    gen_server:start_link(?MODULE, Name, []).
 
 push(Pid, Data) ->
     gen_server:call(Pid, {push, Data}).
@@ -39,8 +45,8 @@ release(Pid, UUID) ->
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
-init({Name, Props}) ->
-    ok = lmq_lib:create(Name),
+init(Name) ->
+    Props = lmq_lib:queue_info(Name),
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 

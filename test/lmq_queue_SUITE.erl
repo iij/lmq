@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([push_pull_done/1, release/1, multi_queue/1, pull_timeout/1]).
+-export([init/1, push_pull_done/1, release/1, multi_queue/1, pull_timeout/1]).
 
 all() ->
-    [push_pull_done, release, multi_queue, pull_timeout].
+    [init, push_pull_done, release, multi_queue, pull_timeout].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -22,12 +22,28 @@ end_per_suite(_Config) ->
     application:stop(mnesia),
     mnesia:delete_schema([node()]).
 
+init_per_testcase(init, Config) ->
+    Config;
 init_per_testcase(_, Config) ->
     {ok, Pid} = lmq_queue:start_link(message),
     [{queue, Pid} | Config].
 
+end_per_testcase(init, _Config) ->
+    ok;
 end_per_testcase(_, Config) ->
     lmq_queue:stop(?config(queue, Config)).
+
+init(_Config) ->
+    not_found = lmq_lib:queue_info(queue_test_1),
+    {ok, Q1} = lmq_queue:start_link(queue_test_1),
+    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(queue_test_1),
+    lmq_queue:stop(Q1),
+    {ok, Q2} = lmq_queue:start_link(queue_test_1, [{timeout, 10}]),
+    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    lmq_queue:stop(Q2),
+    {ok, Q3} = lmq_queue:start_link(queue_test_1),
+    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    lmq_queue:stop(Q3).
 
 push_pull_done(Config) ->
     Pid = ?config(queue, Config),
