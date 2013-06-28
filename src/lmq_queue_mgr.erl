@@ -19,26 +19,18 @@ start_link(Sup) ->
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
 
-create(Name) when is_list(Name) ->
-    create(list_to_atom(Name));
 create(Name) when is_atom(Name) ->
     create(Name, ?DEFAULT_QUEUE_PROPS).
 
-create(Name, Props) when is_list(Name) ->
-    create(list_to_atom(Name), Props);
 create(Name, Props) when is_atom(Name) ->
     gen_server:call(?MODULE, {create, Name, Props}).
 
-find(Name) when is_list(Name) ->
-    find(list_to_atom(Name));
 find(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {find, Name}).
 
 match(Regexp) when is_list(Regexp) ->
     gen_server:call(?MODULE, {match, Regexp}).
 
-delete(Name) when is_list(Name) ->
-    delete(list_to_atom(Name));
 delete(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {delete, Name}).
 

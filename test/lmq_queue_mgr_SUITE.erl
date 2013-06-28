@@ -30,9 +30,9 @@ end_per_testcase(_, _Config) ->
     ok.
 
 creation(_Config) ->
-    ok = lmq_queue_mgr:create("q1"),
+    ok = lmq_queue_mgr:create(q1),
     ok = lmq_queue_mgr:create(q2),
-    Q1 = lmq_queue_mgr:find("q1"),
+    Q1 = lmq_queue_mgr:find(q1),
     Q2 = lmq_queue_mgr:find(q2),
     R1 = make_ref(), R2 = make_ref(),
     lmq_queue:push(Q1, R1),
@@ -43,9 +43,9 @@ creation(_Config) ->
     R2 = M2#message.data.
 
 match(_Config) ->
-    ok = lmq_queue_mgr:create("foo/bar"),
-    ok = lmq_queue_mgr:create("foo"),
-    ok = lmq_queue_mgr:create("foo/baz"),
+    ok = lmq_queue_mgr:create('foo/bar'),
+    ok = lmq_queue_mgr:create(foo),
+    ok = lmq_queue_mgr:create('foo/baz'),
     Q1 = lmq_queue_mgr:find('foo/bar'),
     Q2 = lmq_queue_mgr:find('foo/baz'),
     R = lmq_queue_mgr:match("^foo/.*"),
