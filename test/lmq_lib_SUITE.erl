@@ -4,10 +4,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create_delete/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
+-export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
 
 all() ->
-    [create_delete, done, release, retain, waittime, error_case].
+    [create_delete, queue_names, done, release, retain, waittime, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -42,6 +42,13 @@ create_delete(_Config) ->
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
     not_found = lmq_lib:queue_info(test),
     ok = lmq_lib:delete(test).
+
+queue_names(Config) ->
+    Name = fooooo,
+    lmq_lib:create(Name),
+    true = lists:sort([?config(qname, Config), Name]) =:=
+        lists:sort(lmq_lib:all_queue_names()),
+    lmq_lib:delete(Name).
 
 done(Config) ->
     Name = ?config(qname, Config),

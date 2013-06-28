@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--export([create_admin_table/0, queue_info/1, create/1,
+-export([create_admin_table/0, queue_info/1, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
     first/1, waittime/1, export_message/1]).
 
@@ -24,6 +24,12 @@ queue_info(Name) when is_atom(Name) ->
         end
     end,
     transaction(F).
+
+all_queue_names() ->
+    transaction(fun() ->
+        qlc:e(qlc:q([N || #queue_info{name=N}
+                          <- mnesia:table(?QUEUE_INFO_TABLE)]))
+    end).
 
 create(Name) when is_atom(Name) ->
     create(Name, ?DEFAULT_QUEUE_PROPS).
