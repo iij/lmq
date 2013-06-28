@@ -14,7 +14,7 @@
 -record(state, {sup, qmap=dict:new()}).
 
 start_link(Sup) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Sup], []).
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Sup, []).
 
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
@@ -42,7 +42,7 @@ delete(Name) when is_list(Name) ->
 delete(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {delete, Name}).
 
-init([Sup]) ->
+init(Sup) ->
     %% start queue supervisor later in order to avoid deadlock
     self() ! {start_queue_supervisor, Sup},
     {ok, #state{}}.
