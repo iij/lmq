@@ -5,23 +5,24 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1, match/1, restart_queue/1]).
+-export([creation/1, match/1, restart_queue/1, auto_load/1]).
 
 all() ->
-    [creation, match, restart_queue].
+    [creation, match, restart_queue, auto_load].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
     application:set_env(mnesia, dir, Priv),
     lmq:install([node()]),
-    application:start(mnesia),
-    application:start(lmq),
+    ok = application:start(mnesia),
     Config.
 
 end_per_suite(_Config) ->
     application:stop(mnesia),
     mnesia:delete_schema([node()]).
 
+init_per_testcase(auto_load, Config) ->
+    Config;
 init_per_testcase(_, Config) ->
     {ok, _} = lmq_queue_supersup:start_link(),
     Config.
@@ -61,3 +62,12 @@ restart_queue(_Config) ->
     timer:sleep(50), % sleep until DOWN message handled
     Q2 = lmq_queue_mgr:find(test),
     true = Q1 =/= Q2.
+
+auto_load(_Config) ->
+    lmq_lib:create(auto_loaded_1),
+    lmq_lib:create(auto_loaded_2),
+    {ok, _} = lmq_queue_supersup:start_link(),
+    timer:sleep(100), % wait until queue will be started
+    true = is_pid(lmq_queue_mgr:find('auto_loaded_1')),
+    true = is_pid(lmq_queue_mgr:find('auto_loaded_2')),
+    not_found = lmq_queue_mgr:find('auto_loaded_3').

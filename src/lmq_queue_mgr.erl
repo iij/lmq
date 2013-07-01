@@ -90,6 +90,9 @@ handle_cast(_, State) ->
 
 handle_info({start_queue_supervisor, Sup}, S=#state{}) ->
     {ok, Pid} = supervisor:start_child(Sup, ?SPEC),
+    lists:foreach(fun(Name) ->
+        supervisor:start_child(Pid, [Name])
+    end, lmq_lib:all_queue_names()),
     {noreply, S#state{sup=Pid}};
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
     NewQMap = dict:filter(fun(_, {_, R}) ->
