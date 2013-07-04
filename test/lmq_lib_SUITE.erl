@@ -4,10 +4,12 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1, error_case/1]).
+-export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
+    limit_retry/1, error_case/1]).
 
 all() ->
-    [create_delete, queue_names, done, release, retain, waittime, error_case].
+    [create_delete, queue_names, done, release, retain, waittime, limit_retry,
+     error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -86,6 +88,20 @@ waittime(Config) ->
     0 = lmq_lib:waittime(Name),
     lmq_lib:dequeue(Name, 30),
     true = 0 < lmq_lib:waittime(Name).
+
+limit_retry(Config) ->
+    Name = ?config(qname, Config),
+    Timeout = 0,
+    Ref = make_ref(),
+    %% retry 5 times, that means dequeue succeed 6 times
+    ok = lmq_lib:enqueue(Name, Ref, 5),
+    lists:all(fun(M) -> Ref =:= M#message.data end,
+        [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 6)]),
+    empty = lmq_lib:dequeue(Name, Timeout),
+    %% retry infinity
+    ok = lmq_lib:enqueue(Name, Ref),
+    lists:all(fun(M) -> Ref =:= M#message.data end,
+        [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 10)]).
 
 error_case(_Config) ->
     Name = '__abcdefg__',

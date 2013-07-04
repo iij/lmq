@@ -3,8 +3,8 @@
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 -export([create_admin_table/0, queue_info/1, all_queue_names/0, create/1,
-    create/2, delete/1, enqueue/2, dequeue/2, done/2, retain/3, release/2,
-    first/1, waittime/1, export_message/1]).
+    create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
+    release/2, first/1, waittime/1, export_message/1]).
 
 create_admin_table() ->
     case mnesia:create_table(?QUEUE_INFO_TABLE, ?QUEUE_INFO_TABLE_DEFS) of
@@ -63,32 +63,44 @@ delete(Name) when is_atom(Name) ->
     end.
 
 enqueue(Name, Data) ->
-    M = #message{data=Data},
+    enqueue(Name, Data, infinity).
+
+enqueue(Name, Data, Retry) ->
+    M = #message{data=Data, retry=Retry},
     F = fun() -> mnesia:write(Name, M, write) end,
     transaction(F).
 
 dequeue(Name, Timeout) ->
-    F = fun() ->
-        case mnesia:first(Name) of
-            '$end_of_table' ->
-                empty;
-            Key ->
-                [M] = mnesia:read(Name, Key, read),
-                {TS, _} = M#message.id,
-                Now = lmq_misc:unixtime(),
-                case TS > Now of
-                    true ->
-                        empty;
-                    false ->
-                        NewId = {Now + Timeout, uuid:get_v4()},
-                        NewMsg = M#message{id=NewId, active=true},
-                        mnesia:write(Name, NewMsg, write),
-                        mnesia:delete(Name, Key, write),
-                        NewMsg
-                end
-        end
-    end,
-    transaction(F).
+    transaction(fun() -> get_first_message(Name, Timeout) end).
+
+get_first_message(Name, Timeout) ->
+    case mnesia:first(Name) of
+        '$end_of_table' ->
+            empty;
+        Key ->
+            [M] = mnesia:read(Name, Key, read),
+            {TS, _} = M#message.id,
+            Now = lmq_misc:unixtime(),
+            case TS > Now of
+                true ->
+                    empty;
+                false ->
+                    mnesia:delete(Name, Key, write),
+                    NewId = {Now + Timeout, uuid:get_v4()},
+                    case M#message.retry of
+                        infinity ->
+                            NewMsg = M#message{id=NewId, active=true},
+                            mnesia:write(Name, NewMsg, write),
+                            NewMsg;
+                        N when N < 0 ->
+                            get_first_message(Name, Timeout);
+                        N ->
+                            NewMsg = M#message{id=NewId, active=true, retry=N-1},
+                            mnesia:write(Name, NewMsg, write),
+                            NewMsg
+                    end
+            end
+    end.
 
 done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
