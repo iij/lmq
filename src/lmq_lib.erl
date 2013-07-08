@@ -59,7 +59,7 @@ delete(Name) when is_atom(Name) ->
         {atomic, ok} -> ok;
         {aborted, {no_exists, Name}} -> ok;
         Other ->
-            lagger:error("Failed to delete table '~p': ~p", [Name, Other])
+            lager:error("Failed to delete table '~p': ~p", [Name, Other])
     end.
 
 enqueue(Name, Data) ->
