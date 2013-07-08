@@ -50,12 +50,9 @@ init(Name) ->
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
-handle_call({push, Data}, _From, S=#state{name=Name}) ->
-    R = lmq_lib:enqueue(Name, Data),
-    case queue:is_empty(S#state.waiting) of
-        true  -> {reply, R, S};
-        false -> {reply, R, S, lmq_lib:waittime(Name)}
-    end;
+handle_call({push, Data}, _From, S=#state{}) ->
+    R = lmq_lib:enqueue(S#state.name, Data),
+    {reply, R, S, get_timeout(S)};
 handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     ExpireAt = case Timeout of
         infinity -> infinity;
@@ -64,13 +61,15 @@ handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     Ref = erlang:monitor(process, Pid),
     Waiting = queue:in({From, ExpireAt, Ref}, S#state.waiting),
     Monitors = gb_sets:add(Ref, S#state.monitors),
-    {noreply, S#state{waiting=Waiting, monitors=Monitors}, lmq_lib:waittime(S#state.name)};
+    NewState = S#state{waiting=Waiting, monitors=Monitors},
+    {noreply, NewState, get_timeout(NewState)};
 handle_call({done, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:done(S#state.name, UUID), S};
+    {reply, lmq_lib:done(S#state.name, UUID), S, get_timeout(S)};
 handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
-    {reply, lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)), S};
+    R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
+    {reply, R, S, get_timeout(S)};
 handle_call({release, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:release(S#state.name, UUID), S};
+    {reply, lmq_lib:release(S#state.name, UUID), S, get_timeout(S)};
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
@@ -80,22 +79,21 @@ handle_cast(Msg, State) ->
 
 handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
-    case queue:is_empty(NewState#state.waiting) of
-        true  -> {noreply, NewState};
-        false -> {noreply, NewState, lmq_lib:waittime(S#state.name)}
-    end;
+    lager:debug("number of waitings: ~p", [queue:len(NewState#state.waiting)]),
+    {noreply, NewState, get_timeout(NewState)};
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
-    case gb_sets:is_member(Ref, M) of
+    NewState = case gb_sets:is_member(Ref, M) of
         true ->
             erlang:demonitor(Ref, [flush]),
             Waiting = queue:filter(
                 fun({_, _, V}) when V =:= Ref -> false;
                    (_) -> true
                 end, S#state.waiting),
-            {noreply, S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)}};
+            S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)};
         false ->
-            {noreply, S}
-    end;
+            S
+    end,
+    {noreply, NewState, get_timeout(NewState)};
 handle_info(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
     {noreply, State}.
@@ -124,4 +122,10 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
             end;
         {empty, Waiting} ->
             S
+    end.
+
+get_timeout(S=#state{}) ->
+    case queue:is_empty(S#state.waiting) of
+        true  -> infinity;
+        false -> lmq_lib:waittime(S#state.name)
     end.

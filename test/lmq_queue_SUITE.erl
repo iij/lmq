@@ -5,10 +5,11 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([init/1, push_pull_done/1, release/1, multi_queue/1, pull_timeout/1]).
+-export([init/1, push_pull_done/1, release/1, multi_queue/1, pull_timeout/1,
+    async_request/1]).
 
 all() ->
-    [init, push_pull_done, release, multi_queue, pull_timeout].
+    [init, push_pull_done, release, multi_queue, pull_timeout, async_request].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -98,3 +99,25 @@ pull_timeout(_Config) ->
     true = M1 =/= M2,
     empty = lmq_queue:pull(Q, 0.2),
     M3 = lmq_queue:pull(Q, 0.2), Ref = M3#message.data.
+
+async_request(_Config) ->
+    {ok, Q} = lmq_queue:start_link(async_request, [{timeout, 0.4}]),
+    R1 = make_ref(),
+    R2 = make_ref(),
+    ok = lmq_queue:push(Q, R1),
+    ok = lmq_queue:push(Q, R2),
+    Parent = self(),
+    spawn(fun() ->
+        Parent ! {1, lmq_queue:pull(Q)},
+        Parent ! {2, lmq_queue:pull(Q)},
+        Parent ! {3, lmq_queue:pull(Q, 0.5)}
+    end),
+    lists:foreach(fun(_) ->
+        receive
+            {1, M1} -> ct:pal("~p", [M1]), R1 = M1#message.data;
+            {2, M2} ->
+                ct:pal("~p", [M2]), {_, UUID2} = M2#message.id,
+                ok = lmq_queue:done(Q, UUID2);
+            {3, M3} -> ct:pal("~p", [M3]), R1 = M3#message.data
+        end
+    end, lists:seq(1, 3)).
