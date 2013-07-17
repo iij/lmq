@@ -54,8 +54,9 @@ init(Name) ->
     {ok, #state{name=Name, props=Props}}.
 
 handle_call({push, Data}, _From, S=#state{}) ->
-    R = lmq_lib:enqueue(S#state.name, Data),
+    R = lmq_lib:enqueue(S#state.name, Data, get_retry(S#state.props)),
     {reply, R, S, get_timeout(S)};
+
 handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     ExpireAt = case Timeout of
         infinity -> infinity;
@@ -132,3 +133,7 @@ get_timeout(S=#state{}) ->
         true  -> infinity;
         false -> lmq_lib:waittime(S#state.name)
     end.
+
+get_retry(Props) ->
+    proplists:get_value(retry, Props,
+        proplists:get_value(retry, ?DEFAULT_QUEUE_PROPS)).
