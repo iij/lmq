@@ -46,13 +46,13 @@ handle_call({create, Name, Props}, _From, S=#state{qmap=QMap}) when is_atom(Name
         false ->
             ok = lmq_lib:create(Name, Props),
             NewQMap = dict:store(Name, undefined, S#state.qmap),
-            {ok, _} = supervisor:start_child(S#state.sup, [Name]),
+            {ok, _} = lmq_queue:start(Name),
             {reply, ok, S#state{qmap=NewQMap}}
     end;
 handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     State = case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} ->
-            supervisor:terminate_child(S#state.sup, Pid),
+            lmq_queue:stop(Pid),
             S#state{qmap=dict:erase(Name, S#state.qmap)};
         error ->
             S
@@ -91,7 +91,7 @@ handle_cast(_, State) ->
 handle_info({start_queue_supervisor, Sup}, S=#state{}) ->
     {ok, Pid} = supervisor:start_child(Sup, ?SPEC),
     lists:foreach(fun(Name) ->
-        supervisor:start_child(Pid, [Name])
+        lmq_queue:start(Name)
     end, lmq_lib:all_queue_names()),
     {noreply, S#state{sup=Pid}};
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
