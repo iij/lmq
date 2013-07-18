@@ -3,10 +3,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_done/1, release/1]).
+-export([push_pull_done/1, release/1, props_and_timeout/1]).
 
 all() ->
-    [push_pull_done, release].
+    [push_pull_done, release, props_and_timeout].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -53,3 +53,13 @@ release(Config) ->
     {ok, Res1} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID1}, {<<"content">>, Content}]} = Res1,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, done, [Name, UUID1]).
+
+props_and_timeout(Config) ->
+    Client = ?config(client, Config),
+    Name = ?config(qname, Config),
+    Props = {[{<<"retry">>, 0}, {<<"timeout">>, 0}]},
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name, Props]),
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, <<"test">>]),
+    {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]),
+    {[{<<"id">>, _UUID}, {<<"content">>, <<"test">>}]} = Res,
+    {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]).
