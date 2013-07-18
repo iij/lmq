@@ -5,10 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1, match/1, restart_queue/1, auto_load/1]).
+-export([creation/1, creation_with_props/1, match/1, restart_queue/1, auto_load/1]).
 
 all() ->
-    [creation, match, restart_queue, auto_load].
+    [creation, creation_with_props, match, restart_queue, auto_load].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -42,6 +42,13 @@ creation(_Config) ->
     M1 = lmq_queue:pull(Q1),
     R1 = M1#message.data,
     R2 = M2#message.data.
+
+creation_with_props(_Config) ->
+    ok = lmq_queue_mgr:create(qwp, [{timeout, 1}]),
+    true = is_pid(lmq_queue_mgr:find(qwp)),
+    Props = lmq_lib:queue_info(qwp),
+    1 = proplists:get_value(timeout, Props),
+    2 = proplists:get_value(retry, Props).
 
 match(_Config) ->
     ok = lmq_queue_mgr:create('foo/bar'),

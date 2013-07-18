@@ -32,6 +32,8 @@ unixtime_test() ->
 extend_test() ->
     ?assertEq(lmq_misc:extend([{retry, infinity}, {timeout, 5}],
                               [{timeout, 30}, {type, normal}]),
-              [{retry, infinity}, {timeout, 5}, {type, normal}]).
+              [{retry, infinity}, {timeout, 5}, {type, normal}]),
+    ?assertEq(lmq_misc:extend([], [{timeout, 30}, {type, normal}]),
+              [{timeout, 30}, {type, normal}]).
 
 -endif.

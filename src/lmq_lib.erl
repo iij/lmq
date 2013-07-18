@@ -32,15 +32,16 @@ all_queue_names() ->
     end).
 
 create(Name) when is_atom(Name) ->
-    create(Name, ?DEFAULT_QUEUE_PROPS).
+    create(Name, []).
 
 create(Name, Props) when is_atom(Name) ->
+    Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
         {record_name, message}
     ],
-    Info = #queue_info{name=Name, props=Props},
+    Info = #queue_info{name=Name, props=Props1},
     F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
 
     case mnesia:create_table(Name, Def) of

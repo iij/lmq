@@ -40,10 +40,10 @@ init(_Config) ->
     ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(queue_test_1),
     lmq_queue:stop(Q1),
     {ok, Q2} = lmq_queue:start_link(queue_test_1, [{timeout, 10}]),
-    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
     lmq_queue:stop(Q2),
     {ok, Q3} = lmq_queue:start_link(queue_test_1),
-    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
     lmq_queue:stop(Q3).
 
 push_pull_done(Config) ->
