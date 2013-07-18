@@ -56,7 +56,8 @@ init(Name) ->
 
 handle_call({push, Data}, _From, S=#state{}) ->
     R = lmq_lib:enqueue(S#state.name, Data, get_retry(S#state.props)),
-    {reply, R, S, get_timeout(S)};
+    {State, Sleep} = prepare_sleep(S),
+    {reply, R, State, Sleep};
 
 handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     Ref = erlang:monitor(process, Pid),
@@ -64,14 +65,22 @@ handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
                        S#state.waiting),
     Monitors = gb_sets:add(Ref, S#state.monitors),
     NewState = S#state{waiting=Waiting, monitors=Monitors},
-    {noreply, NewState, get_timeout(NewState)};
+    {NewState1, Sleep} = prepare_sleep(NewState),
+    {noreply, NewState1, Sleep};
+
 handle_call({done, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:done(S#state.name, UUID), S, get_timeout(S)};
+    {State, Sleep} = prepare_sleep(S),
+    {reply, lmq_lib:done(S#state.name, UUID), State, Sleep};
+
 handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
     R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
-    {reply, R, S, get_timeout(S)};
+    {State, Sleep} = prepare_sleep(S),
+    {reply, R, State, Sleep};
+
 handle_call({release, UUID}, _From, S=#state{}) ->
-    {reply, lmq_lib:release(S#state.name, UUID), S, get_timeout(S)};
+    {State, Sleep} = prepare_sleep(S),
+    {reply, lmq_lib:release(S#state.name, UUID), State, Sleep};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
@@ -82,7 +91,9 @@ handle_cast(Msg, State) ->
 handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
     lager:debug("number of waitings: ~p", [queue:len(NewState#state.waiting)]),
-    {noreply, NewState, get_timeout(NewState)};
+    {State, Sleep} = prepare_sleep(NewState),
+    {noreply, State, Sleep};
+
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
     NewState = case gb_sets:is_member(Ref, M) of
         true ->
@@ -95,7 +106,9 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
         false ->
             S
     end,
-    {noreply, NewState, get_timeout(NewState)};
+    {State, Sleep} = prepare_sleep(NewState),
+    {noreply, State, Sleep};
+
 handle_info(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
     {noreply, State}.
@@ -131,10 +144,24 @@ wait_valid(#waiting{timeout=infinity}) ->
 wait_valid(#waiting{start_time=StartTime, timeout=Timeout}) ->
     StartTime + Timeout > lmq_misc:unixtime().
 
-get_timeout(S=#state{}) ->
+prepare_sleep(S=#state{}) ->
     case queue:is_empty(S#state.waiting) of
-        true  -> infinity;
-        false -> lmq_lib:waittime(S#state.name)
+        true  -> {S, infinity};
+        false ->
+            case lmq_lib:waittime(S#state.name) of
+                0 -> {S, 0};
+                T ->
+                    %% remove invalid waitings before sleeping
+                    F = fun(W=#waiting{}) ->
+                        case wait_valid(W) of
+                            true -> true;
+                            false ->
+                                gen_server:reply(W#waiting.from, {error, timeout}),
+                                false
+                        end
+                    end,
+                    {S#state{waiting=queue:filter(F, S#state.waiting)}, T}
+            end
     end.
 
 get_retry(Props) ->
