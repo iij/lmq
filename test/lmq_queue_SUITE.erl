@@ -93,8 +93,9 @@ multi_queue(Config) ->
 pull_timeout(_Config) ->
     {ok, Q} = lmq_queue:start_link(pull_timeout, [{timeout, 0.3}]),
     Ref = make_ref(),
+    empty = lmq_queue:pull(Q, 0),
     ok = lmq_queue:push(Q, Ref),
-    M1 = lmq_queue:pull(Q), Ref = M1#message.data,
+    M1 = lmq_queue:pull(Q, 0), Ref = M1#message.data,
     M2 = lmq_queue:pull(Q), Ref = M2#message.data,
     true = M1 =/= M2,
     empty = lmq_queue:pull(Q, 0.2),

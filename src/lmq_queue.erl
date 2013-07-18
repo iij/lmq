@@ -30,6 +30,13 @@ push(Pid, Data) ->
 pull(Pid) ->
     gen_server:call(Pid, {pull, infinity}, infinity).
 
+pull(Pid, 0) ->
+    %% in this case, cannot use gen_server's timeout
+    case gen_server:call(Pid, {pull, 0}) of
+        {error, timeout} -> empty;
+        R -> R
+    end;
+
 pull(Pid, Timeout) ->
     try gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
         R -> R
@@ -123,7 +130,10 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
     case queue:out(Waiting) of
         {{value, W=#waiting{ref=Ref}}, NewWaiting} ->
             Timeout = proplists:get_value(timeout, Props),
-            case wait_valid(W) andalso
+            %% timeout = 0 is special case and it is safe to use it,
+            %% because invalid waitings are removed before sleeping.
+            %% thus, only waitings added in this tick are remained.
+            case (W#waiting.timeout =:= 0 orelse wait_valid(W)) andalso
                     lmq_lib:dequeue(S#state.name, Timeout) of
                 false -> %% client timeout
                     maybe_push_message(S#state{waiting=NewWaiting});
