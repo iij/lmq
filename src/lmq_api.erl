@@ -11,8 +11,7 @@ create(Name) when is_binary(Name) ->
 create(Name, Props) when is_binary(Name) ->
     lager:info("lmq_api:create(~s, ~p)", [Name, Props]),
     Name1 = binary_to_atom(Name, latin1),
-    {Props1} = Props, %% jiffy style to proplists
-    ok = lmq_queue_mgr:create(Name1, Props1),
+    ok = lmq_queue_mgr:create(Name1, normalize_props(Props)),
     <<"ok">>.
 
 push(Name, Msg) when is_binary(Name) ->
@@ -71,3 +70,25 @@ find(Name) when is_binary(Name) ->
 
 convert_uuid(UUID) when is_binary(UUID) ->
     uuid:string_to_uuid(binary_to_list(UUID)).
+
+normalize_props({Props}) ->
+    %% jiffy style to proplists
+    normalize_props(Props, []).
+
+normalize_props([{<<"pack">>, Duration} | T], Acc) ->
+    normalize_props(T, [{pack, round(Duration * 1000)} | Acc]);
+normalize_props([{K, V} | T], Acc) ->
+    normalize_props(T, [{binary_to_atom(K, latin1), V} | Acc]);
+normalize_props([], Acc) ->
+    lists:reverse(Acc).
+
+
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+normalize_props_test() ->
+    ?assertEqual(normalize_props({[{<<"retry">>, 3}, {<<"timeout">>, 5.0},
+                                  {<<"pack">>, 0.5}]}),
+                 [{retry, 3}, {timeout, 5.0}, {pack, 500}]).
+
+-endif.
