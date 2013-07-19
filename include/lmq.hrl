@@ -1,5 +1,5 @@
 -record(message, {id={lmq_misc:unixtime(), uuid:get_v4()},
-                  active=false, retry, data}).
+                  state=available, retry, data}).
 -record(queue_info, {name, props}).
 
 -define(DEFAULT_QUEUE_PROPS, [{retry, 2}, {timeout, 30}]).

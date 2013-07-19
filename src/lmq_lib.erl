@@ -90,13 +90,13 @@ get_first_message(Name, Timeout) ->
                     NewId = {Now + Timeout, uuid:get_v4()},
                     case M#message.retry of
                         infinity ->
-                            NewMsg = M#message{id=NewId, active=true},
+                            NewMsg = M#message{id=NewId, state=processing},
                             mnesia:write(Name, NewMsg, write),
                             NewMsg;
                         N when N < 0 ->
                             get_first_message(Name, Timeout);
                         N ->
-                            NewMsg = M#message{id=NewId, active=true, retry=N-1},
+                            NewMsg = M#message{id=NewId, state=processing, retry=N-1},
                             mnesia:write(Name, NewMsg, write),
                             NewMsg
                     end
@@ -106,7 +106,7 @@ get_first_message(Name, Timeout) ->
 done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        case qlc:e(qlc:q([X || X=#message{id={TS, ID}, active=true} <- mnesia:table(Name),
+        case qlc:e(qlc:q([X || X=#message{id={TS, ID}, state=processing} <- mnesia:table(Name),
                                ID =:= UUID, TS >= Now])) of
             [M] ->
                 mnesia:delete(Name, M#message.id, write);
@@ -119,10 +119,10 @@ done(Name, UUID) ->
 release(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        case qlc:e(qlc:q([X || X=#message{id={_, ID}, active=true} <- mnesia:table(Name),
+        case qlc:e(qlc:q([X || X=#message{id={_, ID}, state=processing} <- mnesia:table(Name),
                                ID =:= UUID])) of
             [M] ->
-                NewMsg = M#message{id={Now, UUID}, active=false},
+                NewMsg = M#message{id={Now, UUID}, state=available},
                 mnesia:write(Name, NewMsg, write),
                 mnesia:delete(Name, M#message.id, write);
             [] ->
