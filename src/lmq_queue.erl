@@ -62,7 +62,11 @@ init(Name) ->
     {ok, #state{name=Name, props=Props}}.
 
 handle_call({push, Data}, _From, S=#state{}) ->
-    Opts = [{retry, get_retry(S#state.props)}],
+    Retry = proplists:get_value(retry, S#state.props),
+    Opts = case proplists:get_value(pack, S#state.props) of
+        T when is_integer(T) -> [{retry, Retry}, {pack, T}];
+        _ -> [{retry, Retry}]
+    end,
     R = lmq_lib:enqueue(S#state.name, Data, Opts),
     {State, Sleep} = prepare_sleep(S),
     {reply, R, State, Sleep};
@@ -174,7 +178,3 @@ prepare_sleep(S=#state{}) ->
                     {S#state{waiting=queue:filter(F, S#state.waiting)}, T}
             end
     end.
-
-get_retry(Props) ->
-    proplists:get_value(retry, Props,
-        proplists:get_value(retry, ?DEFAULT_QUEUE_PROPS)).
