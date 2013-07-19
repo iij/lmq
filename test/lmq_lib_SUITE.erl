@@ -126,5 +126,6 @@ packing(Config) ->
     lmq_lib:enqueue(Name, R2, [{pack, 100}]),
     lmq_lib:enqueue(Name, R3),
     R3 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    empty = lmq_lib:dequeue(Name, Timeout),
     timer:sleep(100),
     [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.data.
