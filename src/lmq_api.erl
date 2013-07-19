@@ -8,14 +8,12 @@ create(Name) when is_binary(Name) ->
     ok = lmq_queue_mgr:create(Name1),
     <<"ok">>.
 
-create(Name, _Props) when is_binary(Name) ->
-    create(Name).
-    % ct:pal("lmq_api:create(~s, ~p)~n", [Name, Props]),
-    % lager:info("lmq_api:create(~s, ~p)", [Name, Props]),
-    % Name1 = binary_to_atom(Name, latin1),
-    % Props1 = {Props}, %% jiffy style to proplists
-    % ok = lmq_queue_mgr:create(Name1, Props1),
-    % <<"ok">>.
+create(Name, Props) when is_binary(Name) ->
+    lager:info("lmq_api:create(~s, ~p)", [Name, Props]),
+    Name1 = binary_to_atom(Name, latin1),
+    {Props1} = Props, %% jiffy style to proplists
+    ok = lmq_queue_mgr:create(Name1, Props1),
+    <<"ok">>.
 
 push(Name, Msg) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ~p)", [Name, Msg]),
