@@ -96,7 +96,7 @@ limit_retry(Config) ->
     Timeout = 0,
     Ref = make_ref(),
     %% retry 5 times, that means dequeue succeed 6 times
-    ok = lmq_lib:enqueue(Name, Ref, 5),
+    ok = lmq_lib:enqueue(Name, Ref, [{retry, 5}]),
     lists:all(fun(M) -> Ref =:= M#message.data end,
         [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 6)]),
     empty = lmq_lib:dequeue(Name, Timeout),

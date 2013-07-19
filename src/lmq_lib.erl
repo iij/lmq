@@ -64,9 +64,10 @@ delete(Name) when is_atom(Name) ->
     end.
 
 enqueue(Name, Data) ->
-    enqueue(Name, Data, infinity).
+    enqueue(Name, Data, []).
 
-enqueue(Name, Data, Retry) ->
+enqueue(Name, Data, Opts) ->
+    Retry = proplists:get_value(retry, Opts, infinity),
     M = #message{data=Data, retry=Retry},
     F = fun() -> mnesia:write(Name, M, write) end,
     transaction(F).

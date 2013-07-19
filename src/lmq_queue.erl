@@ -62,7 +62,8 @@ init(Name) ->
     {ok, #state{name=Name, props=Props}}.
 
 handle_call({push, Data}, _From, S=#state{}) ->
-    R = lmq_lib:enqueue(S#state.name, Data, get_retry(S#state.props)),
+    Opts = [{retry, get_retry(S#state.props)}],
+    R = lmq_lib:enqueue(S#state.name, Data, Opts),
     {State, Sleep} = prepare_sleep(S),
     {reply, R, State, Sleep};
 
