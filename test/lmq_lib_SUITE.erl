@@ -84,12 +84,12 @@ retain(Config) ->
 
 waittime(Config) ->
     Name = ?config(qname, Config),
-    empty =lmq_lib:first(Name),
+    empty = lmq_lib:first(Name),
     infinity = lmq_lib:waittime(Name),
     ok = lmq_lib:enqueue(Name, make_ref()),
     0 = lmq_lib:waittime(Name),
     lmq_lib:dequeue(Name, 30),
-    true = 0 < lmq_lib:waittime(Name).
+    true = 29500 < lmq_lib:waittime(Name).
 
 limit_retry(Config) ->
     Name = ?config(qname, Config),

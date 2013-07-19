@@ -177,7 +177,7 @@ waittime(Name) ->
         empty -> infinity;
         Message ->
             {TS, _} = Message#message.id,
-            Timeout = round(TS - lmq_misc:unixtime()),
+            Timeout = round((TS - lmq_misc:unixtime()) * 1000),
             lists:max([Timeout, 0])
     end.
 
