@@ -5,11 +5,11 @@
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1]).
+    limit_retry/1, error_case/1, packing/1]).
 
 all() ->
     [create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case].
+     error_case, packing].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -113,3 +113,18 @@ error_case(_Config) ->
     {error, no_queue_exists} = lmq_lib:release(Name, "AAA"),
     {error, no_queue_exists} = lmq_lib:retain(Name, "AAA", 30),
     {error, no_queue_exists} = lmq_lib:waittime(Name).
+
+packing(Config) ->
+    Name = ?config(qname, Config),
+    Timeout = 30,
+    R1 = make_ref(), R2 = make_ref(), R3 = make_ref(),
+    lmq_lib:enqueue(Name, R1, [{pack, 0}]),
+    lmq_lib:enqueue(Name, R2, [{pack, 0}]),
+    [R1] = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    [R2] = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    lmq_lib:enqueue(Name, R1, [{pack, 100}]),
+    lmq_lib:enqueue(Name, R2, [{pack, 100}]),
+    lmq_lib:enqueue(Name, R3),
+    R3 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    timer:sleep(100),
+    [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.data.

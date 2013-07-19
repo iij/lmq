@@ -67,10 +67,33 @@ enqueue(Name, Data) ->
     enqueue(Name, Data, []).
 
 enqueue(Name, Data, Opts) ->
-    Retry = proplists:get_value(retry, Opts, infinity),
-    M = #message{data=Data, retry=Retry},
-    F = fun() -> mnesia:write(Name, M, write) end,
-    transaction(F).
+    case proplists:get_value(pack, Opts) of
+        undefined ->
+            Retry = proplists:get_value(retry, Opts, infinity),
+            Msg = #message{data=Data, retry=Retry},
+            transaction(fun() -> mnesia:write(Name, Msg, write) end);
+        T when is_integer(T) -> %% Packed duration in milliseconds
+            pack_message(Name, Data, Opts)
+    end.
+
+pack_message(Name, Data, Opts) ->
+    transaction(fun() ->
+        QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=packing}
+                                    <- mnesia:table(Name),
+                                    TS >= lmq_misc:unixtime()])),
+        Msg = case qlc:next_answers(QC, 1) of
+            [M] -> %% packing process already started
+                Data1 = M#message.data ++ [Data],
+                M#message{data=Data1};
+            [] -> %% add new message for packing
+                Retry = proplists:get_value(retry, Opts, infinity),
+                Duration = proplists:get_value(pack, Opts),
+                Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
+                #message{id=Id, data=[Data], retry=Retry, state=packing}
+        end,
+        mnesia:write(Name, Msg, write),
+        ok = qlc:delete_cursor(QC)
+    end).
 
 dequeue(Name, Timeout) ->
     transaction(fun() -> get_first_message(Name, Timeout) end).
