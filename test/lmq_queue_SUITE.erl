@@ -5,11 +5,11 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([init/1, push_pull_done/1, release/1, multi_queue/1, pull_timeout/1,
-    async_request/1]).
+-export([init/1, push_pull_done/1, release/1, release_multi/1, multi_queue/1,
+    pull_timeout/1, async_request/1]).
 
 all() ->
-    [init, push_pull_done, release, multi_queue, pull_timeout, async_request].
+    [init, push_pull_done, release, release_multi, multi_queue, pull_timeout, async_request].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -32,7 +32,8 @@ init_per_testcase(_, Config) ->
 end_per_testcase(init, _Config) ->
     ok;
 end_per_testcase(_, Config) ->
-    lmq_queue:stop(?config(queue, Config)).
+    lmq_queue:stop(?config(queue, Config)),
+    lmq_lib:delete(message).
 
 init(_Config) ->
     not_found = lmq_lib:queue_info(queue_test_1),
@@ -73,6 +74,27 @@ release(Config) ->
     {_, UUID2} = M2#message.id,
     true = UUID1 =/= UUID2,
     ok = lmq_queue:done(Pid, UUID2).
+
+release_multi(Config) ->
+    Pid = ?config(queue, Config),
+    R = make_ref(),
+    Parent = self(),
+    ok = lmq_queue:push(Pid, R),
+    M1 = lmq_queue:pull(Pid),
+    spawn(fun() -> Parent ! lmq_queue:pull(Pid) end),
+    R = M1#message.data,
+    {_, UUID1} = M1#message.id,
+    timer:sleep(10), %% waiting for starting process
+    ok = lmq_queue:release(Pid, UUID1),
+    receive
+        M2 ->
+            R = M2#message.data,
+            {_, UUID2} = M2#message.id,
+            true = UUID1 =/= UUID2,
+            ok = lmq_queue:done(Pid, UUID2)
+    after 100 ->
+        ct:fail(no_response)
+    end.
 
 multi_queue(Config) ->
     Q1 = ?config(queue, Config),

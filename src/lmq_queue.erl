@@ -90,8 +90,9 @@ handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
     {reply, R, State, Sleep};
 
 handle_call({release, UUID}, _From, S=#state{}) ->
+    R = lmq_lib:release(S#state.name, UUID),
     {State, Sleep} = prepare_sleep(S),
-    {reply, lmq_lib:release(S#state.name, UUID), State, Sleep};
+    {reply, R, State, Sleep};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
