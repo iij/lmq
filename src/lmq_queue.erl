@@ -81,8 +81,9 @@ handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     {noreply, NewState1, Sleep};
 
 handle_call({done, UUID}, _From, S=#state{}) ->
+    R = lmq_lib:done(S#state.name, UUID),
     {State, Sleep} = prepare_sleep(S),
-    {reply, lmq_lib:done(S#state.name, UUID), State, Sleep};
+    {reply, R, State, Sleep};
 
 handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
     R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
