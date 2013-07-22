@@ -1,7 +1,8 @@
 -module(lmq_queue).
 -behaviour(gen_server).
 -export([start/1, start_link/1, start_link/2, stop/1,
-    push/2, pull/1, pull/2, done/2, retain/2, release/2]).
+    push/2, pull/1, pull/2, pull_async/1, pull_cancel/2,
+    done/2, retain/2, release/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -44,6 +45,12 @@ pull(Pid, Timeout) ->
         exit:{timeout, _} -> empty
     end.
 
+pull_async(Pid) ->
+    gen_server:call(Pid, {pull_async}).
+
+pull_cancel(Pid, Ref) ->
+    gen_server:call(Pid, {pull_cancel, Ref}).
+
 done(Pid, UUID) ->
     gen_server:call(Pid, {done, UUID}).
 
@@ -75,6 +82,17 @@ handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     State = add_waiting(From, Pid, Timeout, S),
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
+
+handle_call({pull_async}, {Pid, _}, S=#state{}) ->
+    State = add_waiting(Pid, S),
+    Ref = (queue:get_r(State#state.waiting))#waiting.ref,
+    {State1, Sleep} = prepare_sleep(State),
+    {reply, Ref, State1, Sleep};
+
+handle_call({pull_cancel, Ref}, _From, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {reply, ok, State1, Sleep};
 
 handle_call({done, UUID}, _From, S=#state{}) ->
     R = lmq_lib:done(S#state.name, UUID),
@@ -135,12 +153,18 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                 Msg ->
                     erlang:demonitor(Ref, [flush]),
                     Monitors = gb_sets:delete(Ref, S#state.monitors),
-                    gen_server:reply(W#waiting.from, Msg),
+                    case W#waiting.from of
+                        {_, _}=From -> gen_server:reply(From, Msg);
+                        P when is_pid(P) -> P ! {Ref, Msg}
+                    end,
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->
             S
     end.
+
+add_waiting(Pid, S=#state{}) ->
+    add_waiting(Pid, Pid, infinity, S).
 
 add_waiting(From, MonitorPid, Timeout, S=#state{}) ->
     Ref = erlang:monitor(process, MonitorPid),
