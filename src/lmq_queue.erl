@@ -72,13 +72,9 @@ handle_call({push, Data}, _From, S=#state{}) ->
     {reply, R, State, Sleep};
 
 handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
-    Ref = erlang:monitor(process, Pid),
-    Waiting = queue:in(#waiting{from=From, ref=Ref, timeout=Timeout},
-                       S#state.waiting),
-    Monitors = gb_sets:add(Ref, S#state.monitors),
-    NewState = S#state{waiting=Waiting, monitors=Monitors},
-    {NewState1, Sleep} = prepare_sleep(NewState),
-    {noreply, NewState1, Sleep};
+    State = add_waiting(From, Pid, Timeout, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
 
 handle_call({done, UUID}, _From, S=#state{}) ->
     R = lmq_lib:done(S#state.name, UUID),
@@ -108,20 +104,10 @@ handle_info(timeout, S=#state{}) ->
     {State, Sleep} = prepare_sleep(NewState),
     {noreply, State, Sleep};
 
-handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
-    NewState = case gb_sets:is_member(Ref, M) of
-        true ->
-            erlang:demonitor(Ref, [flush]),
-            Waiting = queue:filter(
-                fun(#waiting{ref=V}) when V =:= Ref -> false;
-                   (_) -> true
-                end, S#state.waiting),
-            S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)};
-        false ->
-            S
-    end,
-    {State, Sleep} = prepare_sleep(NewState),
-    {noreply, State, Sleep};
+handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
 
 handle_info(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
@@ -153,6 +139,26 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->
+            S
+    end.
+
+add_waiting(From, MonitorPid, Timeout, S=#state{}) ->
+    Ref = erlang:monitor(process, MonitorPid),
+    Waiting = queue:in(#waiting{from=From, ref=Ref, timeout=Timeout},
+                       S#state.waiting),
+    Monitors = gb_sets:add(Ref, S#state.monitors),
+    S#state{waiting=Waiting, monitors=Monitors}.
+
+remove_waiting(Ref, S=#state{monitors=M}) ->
+    case gb_sets:is_member(Ref, M) of
+        true ->
+            erlang:demonitor(Ref, [flush]),
+            Waiting = queue:filter(
+                fun(#waiting{ref=V}) when V =:= Ref -> false;
+                   (_) -> true
+                end, S#state.waiting),
+            S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)};
+        false ->
             S
     end.
 
