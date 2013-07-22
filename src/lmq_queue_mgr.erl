@@ -24,7 +24,7 @@ create(Name, Props) when is_atom(Name) ->
 find(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {find, Name}).
 
-match(Regexp) when is_list(Regexp) ->
+match(Regexp) when is_list(Regexp); is_binary(Regexp) ->
     gen_server:call(?MODULE, {match, Regexp}).
 
 delete(Name) when is_atom(Name) ->

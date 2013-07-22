@@ -57,6 +57,7 @@ match(_Config) ->
     Q1 = lmq_queue_mgr:find('foo/bar'),
     Q2 = lmq_queue_mgr:find('foo/baz'),
     R = lmq_queue_mgr:match("^foo/.*"),
+    R = lmq_queue_mgr:match(<<"^foo/.*">>),
     true = lists:sort([Q1, Q2]) =:= lists:sort(R),
     %% error case
     [] = lmq_queue_mgr:match("AAA"),
