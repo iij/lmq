@@ -1,6 +1,8 @@
 -module(lmq_api).
 
--export([create/1, create/2, push/2, pull/1, pull/2, done/2, retain/2, release/2]).
+-export([create/1, create/2, push/2, pull/1, pull/2, pull_any/1, pull_any/2,
+    done/2, retain/2, release/2]).
+-include("lmq.hrl").
 
 create(Name) when is_binary(Name) ->
     lager:info("lmq_api:create(~s)", [Name]),
@@ -32,6 +34,37 @@ pull(Name, Timeout) when is_binary(Name) ->
     case lmq_queue:pull(Pid, Timeout) of
         empty -> <<"empty">>;
         M -> lmq_lib:export_message(M)
+    end.
+
+pull_any(Regexp) ->
+    pull_any(Regexp, inifinity).
+
+pull_any(Regexp, Timeout) when is_binary(Regexp) ->
+    lager:info("lmq_api:pull_any(~s, ~p)", [Regexp, Timeout]),
+    Timeout1 = case Timeout of
+        inifinity -> infinity;
+        0 -> infinity;
+        Float -> round(Float * 1000)
+    end,
+    Queues = case lmq_queue_mgr:match(Regexp) of
+        {error, Reason} -> throw(Reason);
+        Other -> Other
+    end,
+    Mapping = lists:foldl(fun(Q, Acc) ->
+        Id = lmq_queue:pull_async(Q, Timeout),
+        dict:store(Id, Q, Acc)
+    end, dict:new(), Queues),
+    %% waiting for asynchronous response
+    receive
+        {Id, M=#message{}} ->
+            cancel_pull(dict:erase(Id, Mapping)),
+            lmq_lib:export_message(M);
+        {Id, {error, _Reason}} ->
+            cancel_pull(dict:erase(Id, Mapping)),
+            <<"empty">>
+    after Timeout1 ->
+        cancel_pull(Mapping),
+        <<"empty">>
     end.
 
 done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
@@ -66,6 +99,23 @@ find(Name) when is_binary(Name) ->
     case lmq_queue_mgr:find(Name1) of
         not_found -> throw(queue_not_found);
         Pid -> Pid
+    end.
+
+cancel_pull(Mapping) ->
+    dict:map(fun(I, Q) -> lmq_queue:pull_cancel(Q, I) end, Mapping),
+    release_messages(Mapping).
+
+release_messages(Mapping) ->
+    receive
+        {Id, M=#message{}} ->
+            Q = dict:fetch(Id, Mapping),
+            {_, UUID} = M#message.id,
+            lmq_queue:release(Q, UUID),
+            release_messages(Mapping);
+        {_Id, {error, _Reason}} ->
+            ok
+    after 0 ->
+        ok
     end.
 
 convert_uuid(UUID) when is_binary(UUID) ->

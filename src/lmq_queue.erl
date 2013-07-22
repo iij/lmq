@@ -1,7 +1,8 @@
 -module(lmq_queue).
 -behaviour(gen_server).
 -export([start/1, start_link/1, start_link/2, stop/1,
-    push/2, pull/1, pull/2, done/2, retain/2, release/2]).
+    push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
+    done/2, retain/2, release/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -44,6 +45,15 @@ pull(Pid, Timeout) ->
         exit:{timeout, _} -> empty
     end.
 
+pull_async(Pid) ->
+    pull_async(Pid, infinity).
+
+pull_async(Pid, Timeout) ->
+    gen_server:call(Pid, {pull_async, Timeout}).
+
+pull_cancel(Pid, Ref) ->
+    gen_server:call(Pid, {pull_cancel, Ref}).
+
 done(Pid, UUID) ->
     gen_server:call(Pid, {done, UUID}).
 
@@ -72,13 +82,20 @@ handle_call({push, Data}, _From, S=#state{}) ->
     {reply, R, State, Sleep};
 
 handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
-    Ref = erlang:monitor(process, Pid),
-    Waiting = queue:in(#waiting{from=From, ref=Ref, timeout=Timeout},
-                       S#state.waiting),
-    Monitors = gb_sets:add(Ref, S#state.monitors),
-    NewState = S#state{waiting=Waiting, monitors=Monitors},
-    {NewState1, Sleep} = prepare_sleep(NewState),
-    {noreply, NewState1, Sleep};
+    State = add_waiting(From, Pid, Timeout, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
+
+handle_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
+    State = add_waiting(Pid, Timeout, S),
+    Ref = (queue:get_r(State#state.waiting))#waiting.ref,
+    {State1, Sleep} = prepare_sleep(State),
+    {reply, Ref, State1, Sleep};
+
+handle_call({pull_cancel, Ref}, _From, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {reply, ok, State1, Sleep};
 
 handle_call({done, UUID}, _From, S=#state{}) ->
     R = lmq_lib:done(S#state.name, UUID),
@@ -108,20 +125,10 @@ handle_info(timeout, S=#state{}) ->
     {State, Sleep} = prepare_sleep(NewState),
     {noreply, State, Sleep};
 
-handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{monitors=M}) ->
-    NewState = case gb_sets:is_member(Ref, M) of
-        true ->
-            erlang:demonitor(Ref, [flush]),
-            Waiting = queue:filter(
-                fun(#waiting{ref=V}) when V =:= Ref -> false;
-                   (_) -> true
-                end, S#state.waiting),
-            S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)};
-        false ->
-            S
-    end,
-    {State, Sleep} = prepare_sleep(NewState),
-    {noreply, State, Sleep};
+handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
 
 handle_info(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),
@@ -149,10 +156,36 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                 Msg ->
                     erlang:demonitor(Ref, [flush]),
                     Monitors = gb_sets:delete(Ref, S#state.monitors),
-                    gen_server:reply(W#waiting.from, Msg),
+                    case W#waiting.from of
+                        {_, _}=From -> gen_server:reply(From, Msg);
+                        P when is_pid(P) -> P ! {Ref, Msg}
+                    end,
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->
+            S
+    end.
+
+add_waiting(Pid, Timeout, S=#state{}) ->
+    add_waiting(Pid, Pid, Timeout, S).
+
+add_waiting(From, MonitorPid, Timeout, S=#state{}) ->
+    Ref = erlang:monitor(process, MonitorPid),
+    Waiting = queue:in(#waiting{from=From, ref=Ref, timeout=Timeout},
+                       S#state.waiting),
+    Monitors = gb_sets:add(Ref, S#state.monitors),
+    S#state{waiting=Waiting, monitors=Monitors}.
+
+remove_waiting(Ref, S=#state{monitors=M}) ->
+    case gb_sets:is_member(Ref, M) of
+        true ->
+            erlang:demonitor(Ref, [flush]),
+            Waiting = queue:filter(
+                fun(#waiting{ref=V}) when V =:= Ref -> false;
+                   (_) -> true
+                end, S#state.waiting),
+            S#state{waiting=Waiting, monitors=gb_sets:delete(Ref, M)};
+        false ->
             S
     end.
 
@@ -173,7 +206,10 @@ prepare_sleep(S=#state{}) ->
                         case wait_valid(W) of
                             true -> true;
                             false ->
-                                gen_server:reply(W#waiting.from, {error, timeout}),
+                                case W#waiting.from of
+                                    {_, _}=From -> gen_server:reply(From, {error, timeout});
+                                    P when is_pid(P) -> P ! {W#waiting.ref, {error, timeout}}
+                                end,
                                 false
                         end
                     end,

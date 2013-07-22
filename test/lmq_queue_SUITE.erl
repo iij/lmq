@@ -6,10 +6,11 @@
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([init/1, push_pull_done/1, release/1, release_multi/1, multi_queue/1,
-    pull_timeout/1, async_request/1]).
+    pull_timeout/1, async_request/1, pull_async/1]).
 
 all() ->
-    [init, push_pull_done, release, release_multi, multi_queue, pull_timeout, async_request].
+    [init, push_pull_done, release, release_multi, multi_queue, pull_timeout,
+    async_request, pull_async].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -144,3 +145,23 @@ async_request(_Config) ->
             {3, M3} -> ct:pal("~p", [M3]), R1 = M3#message.data
         end
     end, lists:seq(1, 3)).
+
+pull_async(_Config) ->
+    {ok, Q} = lmq_queue:start_link(message, [{timeout, 0.1}]),
+    R = make_ref(),
+    lmq_queue:push(Q, R),
+    Id1 = lmq_queue:pull_async(Q),
+    receive {Id1, M1} when R =:= M1#message.data -> ok
+    after 100 -> ct:fail(no_response)
+    end,
+
+    Id2 = lmq_queue:pull_async(Q),
+    receive {Id2, M2} when R =:= M2#message.data -> ok
+    after 150 -> ct:fail(no_response)
+    end,
+
+    Id3 = lmq_queue:pull_async(Q),
+    ok = lmq_queue:pull_cancel(Q, Id3),
+    receive {Id3, _} -> ct:fail(cancel_failed)
+    after 150 -> ok
+    end.

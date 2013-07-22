@@ -3,10 +3,11 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_done/1, release/1, props_and_timeout/1, packed_queue/1]).
+-export([push_pull_done/1, release/1, props_and_timeout/1, packed_queue/1,
+    pull_any/1]).
 
 all() ->
-    [push_pull_done, release, props_and_timeout, packed_queue].
+    [push_pull_done, release, props_and_timeout, packed_queue, pull_any].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -81,3 +82,18 @@ packed_queue(Config) ->
         msgpack_rpc_client:call(Client, pull, [Name, 0]),
     {ok, {[{<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]).
+
+pull_any(Config) ->
+    Client = ?config(client, Config),
+    Names = [<<"lmq/foo">>, <<"lmq/bar">>],
+    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
+    [msgpack_rpc_client:call(Client, push, [Name, Name]) || Name <- Names],
+    {ok, {[{<<"id">>, _}, {<<"content">>, R1}]}} =
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
+    {ok, {[{<<"id">>, _}, {<<"content">>, R2}]}} =
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
+    true = lists:sort([R1, R2]) =:= lists:sort(Names),
+    {ok, <<"empty">>} =
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
+    {ok, <<"empty">>} =
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]).
