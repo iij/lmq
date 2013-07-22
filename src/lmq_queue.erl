@@ -1,7 +1,7 @@
 -module(lmq_queue).
 -behaviour(gen_server).
 -export([start/1, start_link/1, start_link/2, stop/1,
-    push/2, pull/1, pull/2, pull_async/1, pull_cancel/2,
+    push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
     done/2, retain/2, release/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
@@ -46,7 +46,10 @@ pull(Pid, Timeout) ->
     end.
 
 pull_async(Pid) ->
-    gen_server:call(Pid, {pull_async}).
+    pull_async(Pid, infinity).
+
+pull_async(Pid, Timeout) ->
+    gen_server:call(Pid, {pull_async, Timeout}).
 
 pull_cancel(Pid, Ref) ->
     gen_server:call(Pid, {pull_cancel, Ref}).
@@ -83,8 +86,8 @@ handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
 
-handle_call({pull_async}, {Pid, _}, S=#state{}) ->
-    State = add_waiting(Pid, S),
+handle_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
+    State = add_waiting(Pid, Timeout, S),
     Ref = (queue:get_r(State#state.waiting))#waiting.ref,
     {State1, Sleep} = prepare_sleep(State),
     {reply, Ref, State1, Sleep};
@@ -163,8 +166,8 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
             S
     end.
 
-add_waiting(Pid, S=#state{}) ->
-    add_waiting(Pid, Pid, infinity, S).
+add_waiting(Pid, Timeout, S=#state{}) ->
+    add_waiting(Pid, Pid, Timeout, S).
 
 add_waiting(From, MonitorPid, Timeout, S=#state{}) ->
     Ref = erlang:monitor(process, MonitorPid),
@@ -203,7 +206,10 @@ prepare_sleep(S=#state{}) ->
                         case wait_valid(W) of
                             true -> true;
                             false ->
-                                gen_server:reply(W#waiting.from, {error, timeout}),
+                                case W#waiting.from of
+                                    {_, _}=From -> gen_server:reply(From, {error, timeout});
+                                    P when is_pid(P) -> P ! {W#waiting.ref, {error, timeout}}
+                                end,
                                 false
                         end
                     end,

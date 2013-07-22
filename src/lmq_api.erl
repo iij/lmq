@@ -41,20 +41,27 @@ pull_any(Regexp) ->
 
 pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     lager:info("lmq_api:pull_any(~s, ~p)", [Regexp, Timeout]),
-    Timeout1 = round(Timeout * 1000),
+    Timeout1 = case Timeout of
+        inifinity -> infinity;
+        0 -> infinity;
+        Float -> round(Float * 1000)
+    end,
     Queues = case lmq_queue_mgr:match(Regexp) of
         {error, Reason} -> throw(Reason);
         Other -> Other
     end,
     Mapping = lists:foldl(fun(Q, Acc) ->
-        Id = lmq_queue:pull_async(Q),
+        Id = lmq_queue:pull_async(Q, Timeout),
         dict:store(Id, Q, Acc)
     end, dict:new(), Queues),
     %% waiting for asynchronous response
     receive
-        {Id, M} ->
+        {Id, M=#message{}} ->
             cancel_pull(dict:erase(Id, Mapping)),
-            lmq_lib:export_message(M)
+            lmq_lib:export_message(M);
+        {Id, {error, _Reason}} ->
+            cancel_pull(dict:erase(Id, Mapping)),
+            <<"empty">>
     after Timeout1 ->
         cancel_pull(Mapping),
         <<"empty">>
@@ -100,11 +107,13 @@ cancel_pull(Mapping) ->
 
 release_messages(Mapping) ->
     receive
-        {Id, M} ->
+        {Id, M=#message{}} ->
             Q = dict:fetch(Id, Mapping),
             {_, UUID} = M#message.id,
             lmq_queue:release(Q, UUID),
-            release_messages(Mapping)
+            release_messages(Mapping);
+        {_Id, {error, _Reason}} ->
+            ok
     after 0 ->
         ok
     end.
