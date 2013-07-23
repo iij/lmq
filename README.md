@@ -37,6 +37,14 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 <dt>name (string)</dt><dd>作成するキューの名前</dd>
 </dl>
 
+#### delete(name) -> "ok"
+
+指定したキューを削除します。
+
+<dl>
+<dt>name (string)</dt><dd>削除するキューの名前</dd>
+</dl>
+
 #### push(name, content) -> "ok"
 
 指定したキューにメッセージを投入します。
@@ -46,12 +54,33 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 <dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
 </dl>
 
-#### pull(name) -> {"id": id, "content": content}
+#### pull(name[, timeout]) -> {"id": id, "content": content} | "empty"
 
 指定したキューからメッセージを取り出します。
 
 <dl>
 <dt>name (string)</dt><dd>キューの名前</dd>
+<dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
+<dt>id (string)</dt><dd>メッセージの ID</dd>
+<dt>content</dt><dd>push() により投入されたデータ</dd>
+</dl>
+
+#### push_all(regexp, content) -> "ok"
+
+正規表現にマッチする全てのキューにメッセージを投入します。
+
+<dl>
+<dt>regexp (string)</dt><dd>正規表現</dd>
+<dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
+</dl>
+
+#### pull_any(regexp[, timeout]) -> {"id": id, "content": content} | "empty"
+
+正規表現にマッチするキューの中から、最も早く取り出せたメッセージを取得します。
+
+<dl>
+<dt>regexp (string)</dt><dd>正規表現</dd>
+<dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
 <dt>id (string)</dt><dd>メッセージの ID</dd>
 <dt>content</dt><dd>push() により投入されたデータ</dd>
 </dl>
