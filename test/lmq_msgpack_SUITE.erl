@@ -4,10 +4,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
 -export([push_pull_done/1, release/1, props_and_timeout/1, packed_queue/1,
-    pull_any/1]).
+    push_all/1, pull_any/1]).
 
 all() ->
-    [push_pull_done, release, props_and_timeout, packed_queue, pull_any].
+    [push_pull_done, release, props_and_timeout, packed_queue, push_all, pull_any].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -83,6 +83,17 @@ packed_queue(Config) ->
     {ok, {[{<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]).
 
+push_all(Config) ->
+    Client = ?config(client, Config),
+    Names = [<<"lmq/foo">>, <<"lmq/bar">>],
+    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push_all, [<<"lmq/.*">>, <<"data">>]),
+    {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
+        msgpack_rpc_client:call(Client, pull, [<<"lmq/foo">>, 0]),
+    {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
+        msgpack_rpc_client:call(Client, pull, [<<"lmq/bar">>, 0]),
+    [lmq_queue_mgr:delete(binary_to_atom(N, latin1)) || N <- Names].
+
 pull_any(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
@@ -96,4 +107,5 @@ pull_any(Config) ->
     {ok, <<"empty">>} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
     {ok, <<"empty">>} =
-        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]).
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
+    [lmq_queue_mgr:delete(binary_to_atom(N, latin1)) || N <- Names].

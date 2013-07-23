@@ -1,7 +1,7 @@
 -module(lmq_api).
 
--export([create/1, create/2, push/2, pull/1, pull/2, pull_any/1, pull_any/2,
-    done/2, retain/2, release/2]).
+-export([create/1, create/2, push/2, pull/1, pull/2, push_all/2,
+    pull_any/1, pull_any/2, done/2, retain/2, release/2]).
 -include("lmq.hrl").
 
 create(Name) when is_binary(Name) ->
@@ -35,6 +35,15 @@ pull(Name, Timeout) when is_binary(Name) ->
         empty -> <<"empty">>;
         M -> lmq_lib:export_message(M)
     end.
+
+push_all(Regexp, Content) when is_binary(Regexp) ->
+    lager:info("lmq_api:push_all(~s, ~p)", [Regexp, Content]),
+    Queues = case lmq_queue_mgr:match(Regexp) of
+        {error, Reason} -> throw(Reason);
+        Other -> Other
+    end,
+    [lmq_queue:push(Q, Content) || Q <- Queues],
+    <<"ok">>.
 
 pull_any(Regexp) ->
     pull_any(Regexp, inifinity).
