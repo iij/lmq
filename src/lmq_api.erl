@@ -1,6 +1,6 @@
 -module(lmq_api).
 
--export([create/1, create/2, push/2, pull/1, pull/2, push_all/2,
+-export([create/1, create/2, delete/1, push/2, pull/1, pull/2, push_all/2,
     pull_any/1, pull_any/2, done/2, retain/2, release/2]).
 -include("lmq.hrl").
 
@@ -14,6 +14,12 @@ create(Name, Props) when is_binary(Name) ->
     lager:info("lmq_api:create(~s, ~p)", [Name, Props]),
     Name1 = binary_to_atom(Name, latin1),
     ok = lmq_queue_mgr:create(Name1, normalize_props(Props)),
+    <<"ok">>.
+
+delete(Name) when is_binary(Name) ->
+    lager:info("lmq_api:delete(~s)", [Name]),
+    Name1 = binary_to_atom(Name, latin1),
+    ok = lmq_queue_mgr:delete(Name1),
     <<"ok">>.
 
 push(Name, Msg) when is_binary(Name) ->

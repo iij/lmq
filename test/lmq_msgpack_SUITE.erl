@@ -92,7 +92,7 @@ push_all(Config) ->
         msgpack_rpc_client:call(Client, pull, [<<"lmq/foo">>, 0]),
     {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
         msgpack_rpc_client:call(Client, pull, [<<"lmq/bar">>, 0]),
-    [lmq_queue_mgr:delete(binary_to_atom(N, latin1)) || N <- Names].
+    [msgpack_rpc_client:call(Client, delete, [N]) || N <- Names].
 
 pull_any(Config) ->
     Client = ?config(client, Config),
@@ -108,4 +108,4 @@ pull_any(Config) ->
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
     {ok, <<"empty">>} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
-    [lmq_queue_mgr:delete(binary_to_atom(N, latin1)) || N <- Names].
+    [msgpack_rpc_client:call(Client, delete, [N]) || N <- Names].
