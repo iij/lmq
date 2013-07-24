@@ -29,13 +29,22 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 
 ### Request Message
 
-#### create(name) -> "ok"
+#### create(name[, property]) -> "ok"
 
 新しいキューを作成します。
 
 <dl>
 <dt>name (string)</dt><dd>作成するキューの名前</dd>
+<dt>property (dict)</dt><dd>キューの動作に関わるプロパティ</dd>
 </dl>
+
+property には以下を指定できます。
+
+name | type | default | description
+- | - | -: | -
+timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
+retry   | integer | 2  | メッセージの再送回数
+pack    | float   |    |複数のメッセージをまとめる期間（秒）
 
 #### delete(name) -> "ok"
 
@@ -58,6 +67,8 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 
 指定したキューからメッセージを取り出します。
 
+timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
+
 <dl>
 <dt>name (string)</dt><dd>キューの名前</dd>
 <dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
@@ -77,6 +88,8 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 #### pull_any(regexp[, timeout]) -> {"id": id, "content": content} | "empty"
 
 正規表現にマッチするキューの中から、最も早く取り出せたメッセージを取得します。
+
+timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
 
 <dl>
 <dt>regexp (string)</dt><dd>正規表現</dd>
