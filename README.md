@@ -41,7 +41,7 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 property には以下を指定できます。
 
 name | type | default | description
-- | - | -: | -
+---  | ---  | ---:    | ---
 timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
 retry   | integer | 2  | メッセージの再送回数
 pack    | float   |    |複数のメッセージをまとめる期間（秒）
