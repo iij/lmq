@@ -5,10 +5,12 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([push_pull_done/1, release/1, multi_queue/1]).
+-export([init/1, push_pull_done/1, release/1, release_multi/1, multi_queue/1,
+    pull_timeout/1, async_request/1, pull_async/1]).
 
 all() ->
-    [push_pull_done, release, multi_queue].
+    [init, push_pull_done, release, release_multi, multi_queue, pull_timeout,
+    async_request, pull_async].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -22,12 +24,29 @@ end_per_suite(_Config) ->
     application:stop(mnesia),
     mnesia:delete_schema([node()]).
 
+init_per_testcase(init, Config) ->
+    Config;
 init_per_testcase(_, Config) ->
     {ok, Pid} = lmq_queue:start_link(message),
     [{queue, Pid} | Config].
 
+end_per_testcase(init, _Config) ->
+    ok;
 end_per_testcase(_, Config) ->
-    lmq_queue:stop(?config(queue, Config)).
+    lmq_queue:stop(?config(queue, Config)),
+    lmq_lib:delete(message).
+
+init(_Config) ->
+    not_found = lmq_lib:queue_info(queue_test_1),
+    {ok, Q1} = lmq_queue:start_link(queue_test_1),
+    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(queue_test_1),
+    lmq_queue:stop(Q1),
+    {ok, Q2} = lmq_queue:start_link(queue_test_1, [{timeout, 10}]),
+    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
+    lmq_queue:stop(Q2),
+    {ok, Q3} = lmq_queue:start_link(queue_test_1),
+    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
+    lmq_queue:stop(Q3).
 
 push_pull_done(Config) ->
     Pid = ?config(queue, Config),
@@ -57,6 +76,27 @@ release(Config) ->
     true = UUID1 =/= UUID2,
     ok = lmq_queue:done(Pid, UUID2).
 
+release_multi(Config) ->
+    Pid = ?config(queue, Config),
+    R = make_ref(),
+    Parent = self(),
+    ok = lmq_queue:push(Pid, R),
+    M1 = lmq_queue:pull(Pid),
+    spawn(fun() -> Parent ! lmq_queue:pull(Pid) end),
+    R = M1#message.data,
+    {_, UUID1} = M1#message.id,
+    timer:sleep(10), %% waiting for starting process
+    ok = lmq_queue:release(Pid, UUID1),
+    receive
+        M2 ->
+            R = M2#message.data,
+            {_, UUID2} = M2#message.id,
+            true = UUID1 =/= UUID2,
+            ok = lmq_queue:done(Pid, UUID2)
+    after 100 ->
+        ct:fail(no_response)
+    end.
+
 multi_queue(Config) ->
     Q1 = ?config(queue, Config),
     {ok, Q2} = lmq_queue:start_link(for_test),
@@ -72,3 +112,56 @@ multi_queue(Config) ->
     M3 = lmq_queue:pull(Q2),
     ok = lmq_queue:done(Q2, element(2, M3#message.id)),
     ok = lmq_queue:stop(Q2).
+
+pull_timeout(_Config) ->
+    {ok, Q} = lmq_queue:start_link(pull_timeout, [{timeout, 0.3}]),
+    Ref = make_ref(),
+    empty = lmq_queue:pull(Q, 0),
+    ok = lmq_queue:push(Q, Ref),
+    M1 = lmq_queue:pull(Q, 0), Ref = M1#message.data,
+    M2 = lmq_queue:pull(Q), Ref = M2#message.data,
+    true = M1 =/= M2,
+    empty = lmq_queue:pull(Q, 0.2),
+    M3 = lmq_queue:pull(Q, 0.2), Ref = M3#message.data.
+
+async_request(_Config) ->
+    {ok, Q} = lmq_queue:start_link(async_request, [{timeout, 0.4}]),
+    R1 = make_ref(),
+    R2 = make_ref(),
+    ok = lmq_queue:push(Q, R1),
+    ok = lmq_queue:push(Q, R2),
+    Parent = self(),
+    spawn(fun() ->
+        Parent ! {1, lmq_queue:pull(Q)},
+        Parent ! {2, lmq_queue:pull(Q)},
+        Parent ! {3, lmq_queue:pull(Q, 0.5)}
+    end),
+    lists:foreach(fun(_) ->
+        receive
+            {1, M1} -> ct:pal("~p", [M1]), R1 = M1#message.data;
+            {2, M2} ->
+                ct:pal("~p", [M2]), {_, UUID2} = M2#message.id,
+                ok = lmq_queue:done(Q, UUID2);
+            {3, M3} -> ct:pal("~p", [M3]), R1 = M3#message.data
+        end
+    end, lists:seq(1, 3)).
+
+pull_async(_Config) ->
+    {ok, Q} = lmq_queue:start_link(message, [{timeout, 0.1}]),
+    R = make_ref(),
+    lmq_queue:push(Q, R),
+    Id1 = lmq_queue:pull_async(Q),
+    receive {Id1, M1} when R =:= M1#message.data -> ok
+    after 100 -> ct:fail(no_response)
+    end,
+
+    Id2 = lmq_queue:pull_async(Q),
+    receive {Id2, M2} when R =:= M2#message.data -> ok
+    after 150 -> ct:fail(no_response)
+    end,
+
+    Id3 = lmq_queue:pull_async(Q),
+    ok = lmq_queue:pull_cancel(Q, Id3),
+    receive {Id3, _} -> ct:fail(cancel_failed)
+    after 150 -> ok
+    end.

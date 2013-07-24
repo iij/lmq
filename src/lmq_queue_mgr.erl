@@ -1,45 +1,61 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/1, queue_started/2, create/1, find/1, match/1]).
+-export([start_link/0, queue_started/2, create/1, create/2, delete/1, find/1, match/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
--define(SPEC, {lmq_queue_sup,
-               {lmq_queue_sup, start_link, []},
-               permanent, 10000,
-               supervisor, [lmq_queue_sup]}).
+-include("lmq.hrl").
 
 -record(state, {sup, qmap=dict:new()}).
 
-start_link(Sup) ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [Sup], []).
+start_link() ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
 
-create(Name) when is_list(Name) ->
-    create(list_to_atom(Name));
 create(Name) when is_atom(Name) ->
-    gen_server:call(?MODULE, {create, Name}).
+    create(Name, ?DEFAULT_QUEUE_PROPS).
 
-find(Name) when is_list(Name) ->
-    find(list_to_atom(Name));
+create(Name, Props) when is_atom(Name) ->
+    gen_server:call(?MODULE, {create, Name, Props}).
+
 find(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {find, Name}).
 
-match(Regexp) when is_list(Regexp) ->
+match(Regexp) when is_list(Regexp); is_binary(Regexp) ->
     gen_server:call(?MODULE, {match, Regexp}).
 
-init([Sup]) ->
-    %% start queue supervisor later in order to avoid deadlock
-    self() ! {start_queue_supervisor, Sup},
+delete(Name) when is_atom(Name) ->
+    gen_server:call(?MODULE, {delete, Name}).
+
+init([]) ->
+    lists:foreach(fun(Name) ->
+        lmq_queue:start(Name)
+    end, lmq_lib:all_queue_names()),
     {ok, #state{}}.
 
-handle_call({create, Name}, _From, S=#state{}) when is_atom(Name) ->
-    ok = lmq_lib:create(Name),
-    {ok, _} = supervisor:start_child(S#state.sup, [Name, self()]),
-    {reply, ok, S};
+handle_call({create, Name, Props}, _From, S=#state{qmap=QMap}) when is_atom(Name) ->
+    case dict:is_key(Name, QMap) of
+        true ->
+            {reply, ok, S};
+        false ->
+            ok = lmq_lib:create(Name, Props),
+            NewQMap = dict:store(Name, undefined, S#state.qmap),
+            {ok, _} = lmq_queue:start(Name),
+            {reply, ok, S#state{qmap=NewQMap}}
+    end;
+handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
+    State = case dict:find(Name, S#state.qmap) of
+        {ok, {Pid, _}} ->
+            lmq_queue:stop(Pid),
+            S#state{qmap=dict:erase(Name, S#state.qmap)};
+        error ->
+            S
+    end,
+    ok = lmq_lib:delete(Name),
+    {reply, ok, State};
 handle_call({find, Name}, _From, S=#state{}) when is_atom(Name) ->
     R = case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} -> Pid;
@@ -69,9 +85,6 @@ handle_cast({queue_started, Name, QPid}, S=#state{qmap=QMap}) when is_atom(Name)
 handle_cast(_, State) ->
     {noreply, State}.
 
-handle_info({start_queue_supervisor, Sup}, S=#state{}) ->
-    {ok, Pid} = supervisor:start_child(Sup, ?SPEC),
-    {noreply, S#state{sup=Pid}};
 handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
     NewQMap = dict:filter(fun(_, {_, R}) ->
         R =/= Ref
