@@ -4,7 +4,7 @@
 -include_lib("stdlib/include/qlc.hrl").
 -export([create_admin_table/0, queue_info/1, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, waittime/1, export_message/1]).
+    release/2, first/1, rfind/2, waittime/1, export_message/1]).
 
 create_admin_table() ->
     case mnesia:create_table(?QUEUE_INFO_TABLE, ?QUEUE_INFO_TABLE_DEFS) of
@@ -130,17 +130,16 @@ get_first_message(Name, Timeout) ->
 done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        QC = qlc:cursor(qlc:q([X || X=#message{id={TS, ID}, state=processing}
-                                    <- mnesia:table(Name),
-                                    ID =:= UUID, TS >= Now])),
-        R = case qlc:next_answers(QC, 1) of
-            [M] ->
-                mnesia:delete(Name, M#message.id, write);
-            [] ->
+        case rfind(Name, UUID) of
+            '$end_of_table' ->
+                not_found;
+            #message{id={TS, UUID}} when TS < Now ->
+                not_found;
+            #message{id=Key, state=processing} ->
+                mnesia:delete(Name, Key, write);
+            _ ->
                 not_found
-        end,
-        ok = qlc:delete_cursor(QC),
-        R
+        end
     end,
     transaction(F).
 
@@ -202,6 +201,14 @@ first(Name) ->
         end
     end,
     transaction(F).
+
+rfind(Tab, Id) ->
+    F = fun(M, _Acc) when element(2, M#message.id) =:= Id ->
+            %% break loop, throw will be handled by foldr
+            throw(M);
+        (_, Acc) -> Acc
+    end,
+    mnesia:foldr(F, '$end_of_table', Tab).
 
 transaction(F) ->
     case mnesia:transaction(F) of
