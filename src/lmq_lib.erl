@@ -146,38 +146,36 @@ done(Name, UUID) ->
 release(Name, UUID) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        QC = qlc:cursor(qlc:q([X || X=#message{id={_, ID}, state=processing}
-                                    <- mnesia:table(Name),
-                                    ID =:= UUID])),
-        R = case qlc:next_answers(QC, 1) of
-            [M] ->
-                NewMsg = M#message{id={Now, UUID}, state=available},
-                mnesia:write(Name, NewMsg, write),
+        case rfind(Name, UUID) of
+            '$end_of_table' ->
+                not_found;
+            #message{id={TS, UUID}} when TS < Now ->
+                not_found;
+            #message{state=processing}=M ->
+                M1 = M#message{id={Now, UUID}, state=available},
+                mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
-            [] ->
+            _ ->
                 not_found
-        end,
-        ok = qlc:delete_cursor(QC),
-        R
+        end
     end,
     transaction(F).
 
 retain(Name, UUID, Timeout) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
-        QC = qlc:cursor(qlc:q([X || X=#message{id={TS, ID}, state=processing}
-                                    <- mnesia:table(Name),
-                                    ID =:= UUID, TS >= Now])),
-        R = case qlc:next_answers(QC, 1) of
-            [M] ->
+        case rfind(Name, UUID) of
+            '$end_of_table' ->
+                not_found;
+            #message{id={TS, UUID}} when TS < Now ->
+                not_found;
+            #message{state=processing}=M ->
                 M1 = M#message{id={Now + Timeout, UUID}},
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
-            [] ->
+            _ ->
                 not_found
-        end,
-        ok = qlc:delete_cursor(QC),
-        R
+        end
     end,
     transaction(F).
 
