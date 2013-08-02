@@ -7,17 +7,7 @@
     mnesia, ranch, lmq]).
 
 start() ->
-    [ensure_started(Dep) || Dep <- ?DEPS],
-
-    {ok, LagerConfig} = application:get_env(lmq, lager),
-    case proplists:get_value(handlers, LagerConfig) of
-        undefined -> ok;
-        Handlers ->
-            application:stop(lager),
-            application:load(lager),
-            application:set_env(lager, handlers, Handlers),
-            ensure_started(lager)
-    end.
+    [ensure_started(Dep) || Dep <- ?DEPS].
 
 stop() ->
     [application:stop(Dep) || Dep <- lists:reverse(?DEPS)],
