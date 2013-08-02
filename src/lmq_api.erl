@@ -23,7 +23,7 @@ delete(Name) when is_binary(Name) ->
     <<"ok">>.
 
 push(Name, Msg) when is_binary(Name) ->
-    lager:info("lmq_api:push(~s, ~p)", [Name, Msg]),
+    lager:info("lmq_api:push(~s, ...)", [Name]),
     Pid = find(Name),
     lmq_queue:push(Pid, Msg),
     <<"ok">>.
