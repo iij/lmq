@@ -36,7 +36,18 @@ LMQ は Erlang で書かれたメッセージキューです。名前を付け�
 ## パフォーマンスチューニング
 高いパフォーマンスが必要な環境では、API のアクセスログを無効化することで 15-30% ほど多くの API リクエストを処理できるようになります。
 
-TODO: ログレベルの設定方法を書く。
+API のアクセスログは `info` レベルで吐かれるので、lager の全てのハンドラのログレベルを `notice` 以上にすればアクセスログによるオーバーヘッドが無くなります。
+
+例えば、以下のように `app.config` を設定できます。
+
+```erlang
+{lager, [
+  {handlers, [
+    {lager_file_backend, [
+      [{file, "./log/console.log"}, {level, notice}, {size, 0}, {date, "$D0"}, {count, 14}]
+    ]}
+  ]},
+```
 
 ## MessagePack-RPC API
 
