@@ -7,7 +7,8 @@
     mnesia, ranch, lmq]).
 
 start() ->
-    [ensure_started(Dep) || Dep <- ?DEPS].
+    [ensure_started(Dep) || Dep <- ?DEPS],
+    lager:set_loglevel(lager_console_backend, debug).
 
 stop() ->
     [application:stop(Dep) || Dep <- lists:reverse(?DEPS)],

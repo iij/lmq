@@ -15,11 +15,6 @@
                  ]},
   {mod, { lmq_app, []}},
   {env, [
-    {port, 18800},
-    {lager, [
-      {handlers, [
-        {lager_console_backend, debug}
-      ]}
-    ]}
+    {port, 18800}
   ]}
  ]}.

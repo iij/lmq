@@ -12,7 +12,6 @@
 %% ===================================================================
 
 start(_StartType, _StartArgs) ->
-    setup_lager(),
     {ok, Port} = application:get_env(port),
     ok = lmq_lib:init_mnesia(),
     R = lmq_sup:start_link(),
@@ -22,14 +21,3 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
     msgpack_rpc_server:stop(?MSGPACK_SERV),
     ok.
-
-setup_lager() ->
-    {ok, LagerConfig} = application:get_env(lmq, lager),
-    case proplists:get_value(handlers, LagerConfig) of
-        undefined -> ok;
-        Handlers ->
-            application:stop(lager),
-            application:load(lager),
-            application:set_env(lager, handlers, Handlers),
-            application:start(lager)
-    end.
