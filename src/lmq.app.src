@@ -1,7 +1,7 @@
 {application, lmq,
  [
   {description, ""},
-  {vsn, "0.2.0"},
+  {vsn, "0.3.0"},
   {registered, []},
   {applications, [
                   kernel,
@@ -15,11 +15,6 @@
                  ]},
   {mod, { lmq_app, []}},
   {env, [
-    {port, 18800},
-    {lager, [
-      {handlers, [
-        {lager_console_backend, debug}
-      ]}
-    ]}
+    {port, 18800}
   ]}
  ]}.

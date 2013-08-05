@@ -23,7 +23,7 @@ delete(Name) when is_binary(Name) ->
     <<"ok">>.
 
 push(Name, Msg) when is_binary(Name) ->
-    lager:info("lmq_api:push(~s, ~p)", [Name, Msg]),
+    lager:info("lmq_api:push(~s, ...)", [Name]),
     Pid = find(Name),
     lmq_queue:push(Pid, Msg),
     <<"ok">>.
@@ -43,7 +43,7 @@ pull(Name, Timeout) when is_binary(Name) ->
     end.
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
-    lager:info("lmq_api:push_all(~s, ~p)", [Regexp, Content]),
+    lager:info("lmq_api:push_all(~s, ...)", [Regexp]),
     Queues = case lmq_queue_mgr:match(Regexp) of
         {error, Reason} -> throw(Reason);
         Other -> Other

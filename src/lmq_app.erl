@@ -13,6 +13,7 @@
 
 start(_StartType, _StartArgs) ->
     {ok, Port} = application:get_env(port),
+    ok = lmq_lib:init_mnesia(),
     R = lmq_sup:start_link(),
     {ok, _} = msgpack_rpc_server:start(?MSGPACK_SERV, tcp, lmq_api, [{port, Port}]),
     R.

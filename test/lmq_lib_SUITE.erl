@@ -13,10 +13,9 @@ all() ->
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
-    application:set_env(mnesia, dir, Priv),
-    lmq:install([node()]),
     application:start(mnesia),
-    application:start(lmq),
+    application:set_env(mnesia, dir, Priv),
+    ok = lmq_lib:init_mnesia(),
     Config.
 
 end_per_suite(_Config) ->
