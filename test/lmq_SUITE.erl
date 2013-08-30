@@ -1,12 +1,13 @@
 -module(lmq_SUITE).
 
+-include("lmq.hrl").
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([pull/1]).
+-export([pull/1, props/1]).
 
 all() ->
-    [pull].
+    [pull, props].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -37,3 +38,19 @@ pull(Config) ->
     after 100 ->
         ct:fail(no_response)
     end.
+
+props(Config) ->
+    Name = ?config(qname, Config),
+    Props = lmq_misc:extend([{retry, 1}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+    true = is_pid(lmq:props(Name, Props)),
+    ok = lmq:push(Name, 1),
+    {[{<<"id">>, _}, {<<"content">>, 1}]} = lmq:pull(Name),
+    {[{<<"id">>, _}, {<<"content">>, 1}]} = lmq:pull(Name),
+    <<"empty">> = lmq:pull(Name, 0),
+
+    %% change retry count
+    Props1 = lmq_misc:extend([{retry, 0}], Props),
+    true = is_pid(lmq:props(Name, Props1)),
+    ok = lmq:push(Name, 2),
+    {[{<<"id">>, _}, {<<"content">>, 2}]} = lmq:pull(Name),
+    <<"empty">> = lmq:pull(Name, 0).

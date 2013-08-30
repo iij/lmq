@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 -export([start/1, start_link/1, start_link/2, stop/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2]).
+    done/2, retain/2, release/2, props/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -63,8 +63,15 @@ retain(Pid, UUID) ->
 release(Pid, UUID) ->
     gen_server:call(Pid, {release, UUID}).
 
+props(Pid, Props) ->
+    gen_server:call(Pid, {props, Props}).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
+
+%% ==================================================================
+%% gen_server callbacks
+%% ==================================================================
 
 init(Name) ->
     Props = lmq_lib:queue_info(Name),
@@ -112,6 +119,12 @@ handle_call({release, UUID}, _From, S=#state{}) ->
     {State, Sleep} = prepare_sleep(S),
     {reply, R, State, Sleep};
 
+handle_call({props, Props}, _From, S=#state{}) ->
+    lmq_lib:update_queue_props(S#state.name, Props),
+    State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {reply, ok, State1, Sleep};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
@@ -139,6 +152,10 @@ code_change(_OldVsn, State, _Extra) ->
 
 terminate(_Reason, _State) ->
     ok.
+
+%% ==================================================================
+%% Private functions
+%% ==================================================================
 
 maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
     case queue:out(Waiting) of

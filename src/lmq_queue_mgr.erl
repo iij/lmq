@@ -72,7 +72,14 @@ handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
 handle_call({find, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
     case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} ->
-            {reply, Pid, S};
+            case proplists:get_value(update, Opts) of
+                true ->
+                    Props = proplists:get_value(props, Opts, ?DEFAULT_QUEUE_PROPS),
+                    ok = lmq_queue:props(Pid, Props),
+                    {reply, Pid, S};
+                undefined ->
+                    {reply, Pid, S}
+            end;
         error ->
             case proplists:get_value(create, Opts) of
                 true ->

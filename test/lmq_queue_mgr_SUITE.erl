@@ -61,6 +61,10 @@ find(_Config) ->
     true = is_pid(lmq_queue_mgr:find('find/a', [create, {props, Props}])),
     ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('find/a'),
 
+    %% ensure override props if setting update flag
+    true = is_pid(lmq_queue_mgr:find('find/a', [update, {props, Props}])),
+    Props = lmq_lib:queue_info('find/a'),
+
     %% ensure custom props can be set
     true = is_pid(lmq_queue_mgr:find('find/b', [create, {props, Props}])),
     Props = lmq_lib:queue_info('find/b').
