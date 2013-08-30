@@ -58,21 +58,7 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 ### Request Message
 
 #### create(name[, property]) -> "ok"
-
-新しいキューを作成します。
-
-<dl>
-<dt>name (string)</dt><dd>作成するキューの名前</dd>
-<dt>property (dict)</dt><dd>キューの動作に関わるプロパティ</dd>
-</dl>
-
-property には以下を指定できます。
-
-name | type | default | description
----  | ---  | ---:    | ---
-timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
-retry   | integer | 2  | メッセージの再送回数
-pack    | float   |    |複数のメッセージをまとめる期間（秒）
+**この API は削除されました。代わりに `set_props` を使用してください。**
 
 #### delete(name) -> "ok"
 
@@ -83,8 +69,7 @@ pack    | float   |    |複数のメッセージをまとめる期間（秒）
 </dl>
 
 #### push(name, content) -> "ok"
-
-指定したキューにメッセージを投入します。
+指定したキューにメッセージを投入します。キューがなければ作成します。
 
 <dl>
 <dt>name (string)</dt><dd>キューの名前</dd>
@@ -92,8 +77,7 @@ pack    | float   |    |複数のメッセージをまとめる期間（秒）
 </dl>
 
 #### pull(name[, timeout]) -> {"id": id, "content": content} | "empty"
-
-指定したキューからメッセージを取り出します。
+指定したキューからメッセージを取り出します。キューがなければ作成します。
 
 timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
 
@@ -157,3 +141,20 @@ timeout を指定し、タイムアウトした時は `empty` 文字列が返り
 <dt>name (string)</dt><dd>キューの名前</dd>
 <dt>id (string)</dt><dd>キューに戻すメッセージの ID</dd>
 </dl>
+
+#### set_props(name[, property]) -> "ok"
+キューのプロパティを更新します。キューがなければ作成します。
+`property` 省略時にはデフォルト値が使われます。
+
+<dl>
+<dt>name (string)</dt><dd>キューの名前</dd>
+<dt>property (dict)</dt><dd>キューの動作に関わるプロパティ</dd>
+</dl>
+
+property には以下を指定できます。
+
+name | type | default | description
+---  | ---  | ---:    | ---
+timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
+retry   | integer | 2  | メッセージの再送回数
+pack    | float   |    |複数のメッセージをまとめる期間（秒）
