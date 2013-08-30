@@ -84,7 +84,7 @@ packed_queue(Config) ->
 push_all(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
-    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
+    [msgpack_rpc_client:call(Client, set_props, [Name]) || Name <- Names],
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push_all, [<<"lmq/.*">>, <<"data">>]),
     {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
         msgpack_rpc_client:call(Client, pull, [<<"lmq/foo">>, 0]),

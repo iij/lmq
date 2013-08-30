@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -export([start/0, stop/0]).
--export([push/2, pull/1, pull/2, set_props/2]).
+-export([push/2, pull/1, pull/2, set_props/1, set_props/2]).
 
 -define(DEPS, [lager, crypto, quickrand, uuid, msgpack, msgpack_rpc,
     mnesia, ranch, lmq]).
@@ -34,6 +34,9 @@ pull(Name, Timeout) when is_atom(Name) ->
         empty -> <<"empty">>;
         Msg -> lmq_lib:export_message(Msg)
     end.
+
+set_props(Name) when is_atom(Name) ->
+    set_props(Name, ?DEFAULT_QUEUE_PROPS).
 
 set_props(Name, Props) when is_atom(Name) ->
     lmq_queue_mgr:find(Name, [create, update, {props, Props}]).
