@@ -142,9 +142,11 @@ timeout を指定し、タイムアウトした時は `empty` 文字列が返り
 <dt>id (string)</dt><dd>キューに戻すメッセージの ID</dd>
 </dl>
 
-#### set_props(name[, property]) -> "ok"
+#### update_props(name[, property]) -> "ok"
 キューのプロパティを更新します。キューがなければ作成します。
-`property` 省略時にはデフォルト値が使われます。
+
+変更したいプロパティだけ指定すれば、残りはデフォルト値が使用されます。
+また、`property` 自体を省略すると、全てデフォルト値に設定されます。
 
 <dl>
 <dt>name (string)</dt><dd>キューの名前</dd>
@@ -157,4 +159,4 @@ name | type | default | description
 ---  | ---  | ---:    | ---
 timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
 retry   | integer | 2  | メッセージの再送回数
-pack    | float   |    |複数のメッセージをまとめる期間（秒）
+pack    | float   | 0  |複数のメッセージをまとめる期間（秒）、0 で無効
