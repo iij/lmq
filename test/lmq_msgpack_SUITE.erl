@@ -34,7 +34,6 @@ push_pull_done(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Content = <<"test data">>,
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
@@ -45,7 +44,6 @@ release(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Content = <<"test data 2">>,
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
@@ -97,7 +95,6 @@ push_all(Config) ->
 pull_any(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
-    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
     [msgpack_rpc_client:call(Client, push, [Name, Name]) || Name <- Names],
     {ok, {[{<<"id">>, _}, {<<"content">>, R1}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),

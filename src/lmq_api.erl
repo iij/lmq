@@ -22,10 +22,9 @@ delete(Name) when is_binary(Name) ->
     ok = lmq_queue_mgr:delete(Name1),
     <<"ok">>.
 
-push(Name, Msg) when is_binary(Name) ->
+push(Name, Content) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ...)", [Name]),
-    Pid = find(Name),
-    lmq_queue:push(Pid, Msg),
+    lmq:push(binary_to_atom(Name, latin1), Content),
     <<"ok">>.
 
 pull(Name) when is_binary(Name) ->

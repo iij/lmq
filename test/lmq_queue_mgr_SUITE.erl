@@ -5,7 +5,8 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1, creation_with_props/1, match/1, restart_queue/1, auto_load/1]).
+-export([creation/1, creation_with_props/1, find/1, match/1, restart_queue/1,
+    auto_load/1]).
 
 all() ->
     [creation, creation_with_props, match, restart_queue, auto_load].
@@ -49,6 +50,20 @@ creation_with_props(_Config) ->
     Props = lmq_lib:queue_info(qwp),
     1 = proplists:get_value(timeout, Props),
     2 = proplists:get_value(retry, Props).
+
+find(_Config) ->
+    not_found = lmq_queue_mgr:find('find/a'),
+    true = is_pid(lmq_queue_mgr:find('find/a', [create])),
+    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('find/a'),
+
+    %% ensure do not override props if exists
+    Props = lib_misc:extend([{retry, infinity}], ?DEFAULT_QUEUE_PROPS),
+    true = is_pid(lmq_queue_mgr:find('find/a', [create, {props, Props}])),
+    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('find/a'),
+
+    %% ensure custom props can be set
+    true = is_pid(lmq_queue_mgr:find('find/b', [create, {props, Props}])),
+    Props = lmq_lib:queue_info('find/b').
 
 match(_Config) ->
     ok = lmq_queue_mgr:create('foo/bar'),
