@@ -34,7 +34,6 @@ push_pull_done(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Content = <<"test data">>,
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
@@ -45,7 +44,6 @@ release(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Content = <<"test data 2">>,
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
     {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
@@ -59,7 +57,7 @@ props_and_timeout(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Props = {[{<<"retry">>, 0}, {<<"timeout">>, 0}]},
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name, Props]),
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_props, [Name, Props]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, <<"test">>]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]),
     {[{<<"id">>, _UUID}, {<<"content">>, <<"test">>}]} = Res,
@@ -69,7 +67,7 @@ packed_queue(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
     Props = {[{<<"timeout">>, 0.4}, {<<"pack">>, 0.2}]},
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, create, [Name, Props]),
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_props, [Name, Props]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 2]),
     {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0]),
@@ -86,7 +84,7 @@ packed_queue(Config) ->
 push_all(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
-    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
+    [msgpack_rpc_client:call(Client, set_props, [Name]) || Name <- Names],
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push_all, [<<"lmq/.*">>, <<"data">>]),
     {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
         msgpack_rpc_client:call(Client, pull, [<<"lmq/foo">>, 0]),
@@ -97,7 +95,6 @@ push_all(Config) ->
 pull_any(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
-    [msgpack_rpc_client:call(Client, create, [Name]) || Name <- Names],
     [msgpack_rpc_client:call(Client, push, [Name, Name]) || Name <- Names],
     {ok, {[{<<"id">>, _}, {<<"content">>, R1}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),

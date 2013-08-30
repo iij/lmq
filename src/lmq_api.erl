@@ -1,20 +1,8 @@
 -module(lmq_api).
 
--export([create/1, create/2, delete/1, push/2, pull/1, pull/2, push_all/2,
-    pull_any/1, pull_any/2, done/2, retain/2, release/2]).
+-export([delete/1, push/2, pull/1, pull/2, push_all/2,
+    pull_any/1, pull_any/2, done/2, retain/2, release/2, set_props/1, set_props/2]).
 -include("lmq.hrl").
-
-create(Name) when is_binary(Name) ->
-    lager:info("lmq_api:create(~s)", [Name]),
-    Name1 = binary_to_atom(Name, latin1),
-    ok = lmq_queue_mgr:create(Name1),
-    <<"ok">>.
-
-create(Name, Props) when is_binary(Name) ->
-    lager:info("lmq_api:create(~s, ~p)", [Name, Props]),
-    Name1 = binary_to_atom(Name, latin1),
-    ok = lmq_queue_mgr:create(Name1, normalize_props(Props)),
-    <<"ok">>.
 
 delete(Name) when is_binary(Name) ->
     lager:info("lmq_api:delete(~s)", [Name]),
@@ -22,25 +10,18 @@ delete(Name) when is_binary(Name) ->
     ok = lmq_queue_mgr:delete(Name1),
     <<"ok">>.
 
-push(Name, Msg) when is_binary(Name) ->
+push(Name, Content) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ...)", [Name]),
-    Pid = find(Name),
-    lmq_queue:push(Pid, Msg),
+    lmq:push(binary_to_atom(Name, latin1), Content),
     <<"ok">>.
 
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),
-    Pid = find(Name),
-    M = lmq_queue:pull(Pid),
-    lmq_lib:export_message(M).
+    lmq:pull(binary_to_atom(Name, latin1)).
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
-    Pid = find(Name),
-    case lmq_queue:pull(Pid, Timeout) of
-        empty -> <<"empty">>;
-        M -> lmq_lib:export_message(M)
-    end.
+    lmq:pull(binary_to_atom(Name, latin1), Timeout).
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
     lager:info("lmq_api:push_all(~s, ...)", [Regexp]),
@@ -109,9 +90,19 @@ release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
         not_found -> throw(not_found)
     end.
 
+set_props(Name) when is_binary(Name) ->
+    lager:info("lmq_api:set_props(~s)", [Name]),
+    lmq:set_props(binary_to_atom(Name, latin1)),
+    <<"ok">>.
+
+set_props(Name, Props) when is_binary(Name) ->
+    lager:info("lmq_api:set_props(~s, ~p)", [Name, Props]),
+    lmq:set_props(binary_to_atom(Name, latin1), normalize_props(Props)),
+    <<"ok">>.
+
 find(Name) when is_binary(Name) ->
     Name1 = binary_to_atom(Name, latin1),
-    case lmq_queue_mgr:find(Name1) of
+    case lmq_queue_mgr:get(Name1) of
         not_found -> throw(queue_not_found);
         Pid -> Pid
     end.
