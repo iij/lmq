@@ -5,11 +5,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([creation/1, creation_with_props/1, find/1, match/1, restart_queue/1,
-    auto_load/1]).
+-export([multi_queue/1, find/1, match/1, restart_queue/1, auto_load/1]).
 
 all() ->
-    [creation, creation_with_props, match, restart_queue, auto_load].
+    [multi_queue, match, restart_queue, auto_load].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -31,11 +30,9 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, _Config) ->
     ok.
 
-creation(_Config) ->
-    ok = lmq_queue_mgr:create(q1),
-    ok = lmq_queue_mgr:create(q2),
-    Q1 = lmq_queue_mgr:find(q1),
-    Q2 = lmq_queue_mgr:find(q2),
+multi_queue(_Config) ->
+    Q1 = lmq_queue_mgr:find(q1, [create]),
+    Q2 = lmq_queue_mgr:find(q2, [create]),
     R1 = make_ref(), R2 = make_ref(),
     lmq_queue:push(Q1, R1),
     lmq_queue:push(Q2, R2),
@@ -43,13 +40,6 @@ creation(_Config) ->
     M1 = lmq_queue:pull(Q1),
     R1 = M1#message.data,
     R2 = M2#message.data.
-
-creation_with_props(_Config) ->
-    ok = lmq_queue_mgr:create(qwp, [{timeout, 1}]),
-    true = is_pid(lmq_queue_mgr:find(qwp)),
-    Props = lmq_lib:queue_info(qwp),
-    1 = proplists:get_value(timeout, Props),
-    2 = proplists:get_value(retry, Props).
 
 find(_Config) ->
     not_found = lmq_queue_mgr:find('find/a'),
@@ -70,11 +60,9 @@ find(_Config) ->
     Props = lmq_lib:queue_info('find/b').
 
 match(_Config) ->
-    ok = lmq_queue_mgr:create('foo/bar'),
-    ok = lmq_queue_mgr:create(foo),
-    ok = lmq_queue_mgr:create('foo/baz'),
-    Q1 = lmq_queue_mgr:find('foo/bar'),
-    Q2 = lmq_queue_mgr:find('foo/baz'),
+    lmq_queue_mgr:find(foo, [create]),
+    Q1 = lmq_queue_mgr:find('foo/bar', [create]),
+    Q2 = lmq_queue_mgr:find('foo/baz', [create]),
     R = lmq_queue_mgr:match("^foo/.*"),
     R = lmq_queue_mgr:match(<<"^foo/.*">>),
     true = lists:sort([Q1, Q2]) =:= lists:sort(R),
@@ -83,8 +71,7 @@ match(_Config) ->
     {error, invalid_regexp} = lmq_queue_mgr:match("a[1-").
 
 restart_queue(_Config) ->
-    ok = lmq_queue_mgr:create(test),
-    Q1 = lmq_queue_mgr:find(test),
+    Q1 = lmq_queue_mgr:find(test, [create]),
     exit(Q1, kill),
     timer:sleep(50), % sleep until DOWN message handled
     Q2 = lmq_queue_mgr:find(test),

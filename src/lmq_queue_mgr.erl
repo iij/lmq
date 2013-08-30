@@ -1,7 +1,7 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/0, queue_started/2, create/1, create/2, delete/1,
+-export([start_link/0, queue_started/2, delete/1,
     find/1, find/2, match/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
@@ -19,12 +19,6 @@ start_link() ->
 
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
-
-create(Name) when is_atom(Name) ->
-    create(Name, ?DEFAULT_QUEUE_PROPS).
-
-create(Name, Props) when is_atom(Name) ->
-    gen_server:call(?MODULE, {create, Name, Props}).
 
 find(Name) when is_atom(Name) ->
     gen_server:call(?MODULE, {find, Name, []}).
@@ -48,16 +42,6 @@ init([]) ->
     end, lmq_lib:all_queue_names()),
     {ok, #state{}}.
 
-handle_call({create, Name, Props}, _From, S=#state{qmap=QMap}) when is_atom(Name) ->
-    case dict:is_key(Name, QMap) of
-        true ->
-            {reply, ok, S};
-        false ->
-            ok = lmq_lib:create(Name, Props),
-            NewQMap = dict:store(Name, undefined, S#state.qmap),
-            {ok, _} = lmq_queue:start(Name),
-            {reply, ok, S#state{qmap=NewQMap}}
-    end;
 handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     State = case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} ->
