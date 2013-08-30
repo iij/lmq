@@ -88,12 +88,12 @@ enqueue(Name, Data) ->
     enqueue(Name, Data, []).
 
 enqueue(Name, Data, Opts) ->
-    case proplists:get_value(pack, Opts) of
-        undefined ->
+    case proplists:get_value(pack, Opts, 0) == 0 of
+        true ->
             Retry = proplists:get_value(retry, Opts, infinity),
             Msg = #message{data=Data, retry=Retry},
             transaction(fun() -> mnesia:write(Name, Msg, write) end);
-        T when is_integer(T) -> %% Packed duration in milliseconds
+        false -> %% Packed duration in milliseconds
             pack_message(Name, Data, Opts)
     end.
 

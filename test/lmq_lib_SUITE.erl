@@ -117,10 +117,17 @@ packing(Config) ->
     Name = ?config(qname, Config),
     Timeout = 30,
     R1 = make_ref(), R2 = make_ref(), R3 = make_ref(),
+    %% 0 means not packing
     lmq_lib:enqueue(Name, R1, [{pack, 0}]),
-    lmq_lib:enqueue(Name, R2, [{pack, 0}]),
+    R1 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+
+    %% get 2 packages, each package contains 1 message
+    lmq_lib:enqueue(Name, R1, [{pack, 1}]), timer:sleep(1),
+    lmq_lib:enqueue(Name, R2, [{pack, 1}]), timer:sleep(1),
     [R1] = (lmq_lib:dequeue(Name, Timeout))#message.data,
     [R2] = (lmq_lib:dequeue(Name, Timeout))#message.data,
+
+    %% packing and no packing message
     lmq_lib:enqueue(Name, R1, [{pack, 100}]),
     lmq_lib:enqueue(Name, R2, [{pack, 100}]),
     lmq_lib:enqueue(Name, R3),
