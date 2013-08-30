@@ -1,7 +1,8 @@
 -module(lmq_api).
 
 -export([delete/1, push/2, pull/1, pull/2, push_all/2,
-    pull_any/1, pull_any/2, done/2, retain/2, release/2, set_props/1, set_props/2]).
+    pull_any/1, pull_any/2, done/2, retain/2, release/2,
+    update_props/1, update_props/2]).
 -include("lmq.hrl").
 
 delete(Name) when is_binary(Name) ->
@@ -90,14 +91,14 @@ release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
         not_found -> throw(not_found)
     end.
 
-set_props(Name) when is_binary(Name) ->
-    lager:info("lmq_api:set_props(~s)", [Name]),
-    lmq:set_props(binary_to_atom(Name, latin1)),
+update_props(Name) when is_binary(Name) ->
+    lager:info("lmq_api:update_props(~s)", [Name]),
+    lmq:update_props(binary_to_atom(Name, latin1)),
     <<"ok">>.
 
-set_props(Name, Props) when is_binary(Name) ->
-    lager:info("lmq_api:set_props(~s, ~p)", [Name, Props]),
-    lmq:set_props(binary_to_atom(Name, latin1), normalize_props(Props)),
+update_props(Name, Props) when is_binary(Name) ->
+    lager:info("lmq_api:update_props(~s, ~p)", [Name, Props]),
+    lmq:update_props(binary_to_atom(Name, latin1), normalize_props(Props)),
     <<"ok">>.
 
 find(Name) when is_binary(Name) ->
