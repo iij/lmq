@@ -47,17 +47,17 @@ get(_Config) ->
     ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('get/a'),
 
     %% ensure do not override props if exists
-    Props = lib_misc:extend([{retry, infinity}], ?DEFAULT_QUEUE_PROPS),
-    true = is_pid(lmq_queue_mgr:get('get/a', [create, {props, Props}])),
+    true = is_pid(lmq_queue_mgr:get('get/a', [create, {props, [{retry, infinity}]}])),
     ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('get/a'),
 
     %% ensure override props if setting update flag
-    true = is_pid(lmq_queue_mgr:get('get/a', [update, {props, Props}])),
-    Props = lmq_lib:queue_info('get/a'),
+    Expected = lib_misc:extend([{retry, infinity}], ?DEFAULT_QUEUE_PROPS),
+    true = is_pid(lmq_queue_mgr:get('get/a', [update, {props, [{retry, infinity}]}])),
+    Expected = lmq_lib:queue_info('get/a'),
 
     %% ensure custom props can be set
-    true = is_pid(lmq_queue_mgr:get('get/b', [create, {props, Props}])),
-    Props = lmq_lib:queue_info('get/b').
+    true = is_pid(lmq_queue_mgr:get('get/b', [create, {props, [{retry, infinity}]}])),
+    Expected = lmq_lib:queue_info('get/b').
 
 match(_Config) ->
     lmq_queue_mgr:get(foo, [create]),
