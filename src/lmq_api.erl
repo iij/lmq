@@ -103,10 +103,12 @@ release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     end.
 
 set_props(Name) when is_binary(Name) ->
+    lager:info("lmq_api:set_props(~s)", [Name]),
     lmq:set_props(binary_to_atom(Name, latin1)),
     <<"ok">>.
 
 set_props(Name, Props) when is_binary(Name) ->
+    lager:info("lmq_api:set_props(~s, ~p)", [Name, Props]),
     lmq:set_props(binary_to_atom(Name, latin1), normalize_props(Props)),
     <<"ok">>.
 
