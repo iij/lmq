@@ -1,8 +1,7 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/0, queue_started/2, delete/1,
-    find/1, find/2, match/1]).
+-export([start_link/0, queue_started/2, delete/1, get/1, get/2, match/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -20,11 +19,11 @@ start_link() ->
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
 
-find(Name) when is_atom(Name) ->
-    gen_server:call(?MODULE, {find, Name, []}).
+get(Name) when is_atom(Name) ->
+    gen_server:call(?MODULE, {get, Name, []}).
 
-find(Name, Opts) when is_atom(Name) ->
-    gen_server:call(?MODULE, {find, Name, Opts}).
+get(Name, Opts) when is_atom(Name) ->
+    gen_server:call(?MODULE, {get, Name, Opts}).
 
 match(Regexp) when is_list(Regexp); is_binary(Regexp) ->
     gen_server:call(?MODULE, {match, Regexp}).
@@ -53,7 +52,7 @@ handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     ok = lmq_lib:delete(Name),
     {reply, ok, State};
 
-handle_call({find, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
+handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
     case dict:find(Name, S#state.qmap) of
         {ok, {Pid, _}} ->
             case proplists:get_value(update, Opts) of

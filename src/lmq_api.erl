@@ -102,7 +102,7 @@ set_props(Name, Props) when is_binary(Name) ->
 
 find(Name) when is_binary(Name) ->
     Name1 = binary_to_atom(Name, latin1),
-    case lmq_queue_mgr:find(Name1) of
+    case lmq_queue_mgr:get(Name1) of
         not_found -> throw(queue_not_found);
         Pid -> Pid
     end.
