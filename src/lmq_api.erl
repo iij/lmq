@@ -29,17 +29,11 @@ push(Name, Content) when is_binary(Name) ->
 
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),
-    Pid = find(Name),
-    M = lmq_queue:pull(Pid),
-    lmq_lib:export_message(M).
+    lmq:pull(binary_to_atom(Name, latin1)).
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
-    Pid = find(Name),
-    case lmq_queue:pull(Pid, Timeout) of
-        empty -> <<"empty">>;
-        M -> lmq_lib:export_message(M)
-    end.
+    lmq:pull(binary_to_atom(Name, latin1), Timeout).
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
     lager:info("lmq_api:push_all(~s, ...)", [Regexp]),

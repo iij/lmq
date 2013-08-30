@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -export([start/0, stop/0]).
--export([push/2]).
+-export([push/2, pull/1, pull/2]).
 
 -define(DEPS, [lager, crypto, quickrand, uuid, msgpack, msgpack_rpc,
     mnesia, ranch, lmq]).
@@ -22,6 +22,18 @@ stop() ->
 push(Name, Content) when is_atom(Name) ->
     Pid = lmq_queue_mgr:find(Name, [create]),
     lmq_queue:push(Pid, Content).
+
+pull(Name) when is_atom(Name) ->
+    Pid = lmq_queue_mgr:find(Name, [create]),
+    Msg = lmq_queue:pull(Pid),
+    lmq_lib:export_message(Msg).
+
+pull(Name, Timeout) when is_atom(Name) ->
+    Pid = lmq_queue_mgr:find(Name, [create]),
+    case lmq_queue:pull(Pid, Timeout) of
+        empty -> <<"empty">>;
+        Msg -> lmq_lib:export_message(Msg)
+    end.
 
 %% ==================================================================
 %% Private functions
