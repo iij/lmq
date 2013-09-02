@@ -1,0 +1,13 @@
+FROM ubuntu
+RUN ln -sf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime
+RUN sed -i -e 's,archive.ubuntu.com,ftp.jaist.ac.jp/pub/Linux,' /etc/apt/sources.list
+RUN apt-get update
+RUN apt-get install -y build-essential curl
+RUN apt-get install -y libncurses5-dev openssl libssl-dev fop xsltproc unixodbc-dev
+RUN apt-get install -y git
+RUN curl -s -O http://erlang.org/download/otp_src_R16B01.tar.gz
+RUN tar xzf otp_src_R16B01.tar.gz
+RUN cd otp_src_R16B01 && ./configure && make && make install
+ADD . /docker
+WORKDIR /docker
+CMD make test
