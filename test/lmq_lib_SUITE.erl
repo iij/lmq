@@ -4,11 +4,11 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
+-export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
     limit_retry/1, error_case/1, packing/1]).
 
 all() ->
-    [create_delete, queue_names, done, release, retain, waittime, limit_retry,
+    [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
      error_case, packing].
 
 init_per_suite(Config) ->
@@ -32,6 +32,11 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     ok = lmq_lib:delete(?config(qname, Config)).
+
+lmq_info(_Config) ->
+    ok = lmq_lib:set_lmq_info(name, lmq),
+    {ok, lmq} = lmq_lib:get_lmq_info(name),
+    {error, not_found} = lmq_lib:get_lmq_info(non_exists).
 
 create_delete(_Config) ->
     ok = lmq_lib:create(test),

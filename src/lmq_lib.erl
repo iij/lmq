@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
--export([init_mnesia/0, create_admin_table/0,
+-export([init_mnesia/0, create_admin_table/0, get_lmq_info/1, set_lmq_info/2,
     queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
     release/2, first/1, rfind/2, waittime/1, export_message/1]).
@@ -22,12 +22,32 @@ init_mnesia() ->
     end.
 
 create_admin_table() ->
+    case mnesia:create_table(?LMQ_INFO_TABLE, ?LMQ_INFO_TABLE_DEFS) of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, ?LMQ_INFO_TABLE}} -> ok;
+        Other1 ->
+            lager:error("Failed to create admin table: ~p", [Other1])
+    end,
     case mnesia:create_table(?QUEUE_INFO_TABLE, ?QUEUE_INFO_TABLE_DEFS) of
         {atomic, ok} -> ok;
         {aborted, {already_exists, ?QUEUE_INFO_TABLE}} -> ok;
-        Other ->
-            lager:error("Failed to create admin table: ~p", [Other])
+        Other2 ->
+            lager:error("Failed to create admin table: ~p", [Other2])
     end.
+
+get_lmq_info(Key) ->
+    transaction(fun() ->
+        case mnesia:read(?LMQ_INFO_TABLE, Key) of
+            [Info] -> {ok, Info#lmq_info.value};
+            _ -> {error, not_found}
+        end
+    end).
+
+set_lmq_info(Key, Value) ->
+    Info = #lmq_info{key=Key, value=Value},
+    transaction(fun() ->
+        ok = mnesia:write(?LMQ_INFO_TABLE, Info, write)
+    end).
 
 queue_info(Name) when is_atom(Name) ->
     F = fun() ->
