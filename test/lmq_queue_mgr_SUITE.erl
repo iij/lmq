@@ -5,10 +5,11 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([multi_queue/1, get/1, match/1, restart_queue/1, auto_load/1]).
+-export([multi_queue/1, get/1, match/1, restart_queue/1, auto_load/1,
+    default_props/1]).
 
 all() ->
-    [multi_queue, match, restart_queue, auto_load].
+    [multi_queue, match, restart_queue, auto_load, default_props].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -85,3 +86,9 @@ auto_load(_Config) ->
     true = is_pid(lmq_queue_mgr:get('auto_loaded_1')),
     true = is_pid(lmq_queue_mgr:get('auto_loaded_2')),
     not_found = lmq_queue_mgr:get('auto_loaded_3').
+
+default_props(_Config) ->
+    PropsList = [{"lmq", [{retry, 0}]}],
+    ok = lmq_queue_mgr:set_default_props(PropsList),
+    {ok, PropsList} = lmq_lib:get_lmq_info(default_props),
+    invalid_syntax = lmq_queue_mgr:set_default_props({}).
