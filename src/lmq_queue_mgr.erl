@@ -72,7 +72,7 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                     Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
                     ok = lmq_lib:create(Name, Props1),
                     {ok, Pid} = lmq_queue:start(Name),
-                    lager:info("A queue named ~s is created"),
+                    lager:info("A queue named ~s is created", [Name]),
                     {reply, Pid, update_qmap(Name, Pid, S)};
                 undefined ->
                     {reply, not_found, S}
