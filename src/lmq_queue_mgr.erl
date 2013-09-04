@@ -2,7 +2,7 @@
 
 -behaviour(gen_server).
 -export([start_link/0, queue_started/2, delete/1, get/1, get/2, match/1,
-    set_default_props/1]).
+    set_default_props/1, get_default_props/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -34,6 +34,9 @@ delete(Name) when is_atom(Name) ->
 
 set_default_props(PropsList) ->
     gen_server:call(?MODULE, {set_default_props, PropsList}).
+
+get_default_props() ->
+    gen_server:call(?MODULE, {get_default_props}).
 
 %% ==================================================================
 %% gen_server callbacks
@@ -107,6 +110,13 @@ handle_call({set_default_props, PropsList}, _From, S=#state{}) ->
             {reply, Reason, S}
     end;
 
+handle_call({get_default_props}, _From, S=#state{}) ->
+    PropsList = case lmq_lib:get_lmq_info(default_props) of
+        {ok, Value} -> Value;
+        _ -> []
+    end,
+    {reply, PropsList, S};
+
 handle_call(Msg, _From, State) ->
     io:format("Unknown message: ~p~n", [Msg]),
     {noreply, State}.
@@ -150,7 +160,7 @@ validate_props_list(PropsList) ->
 validate_props_list([], Acc) ->
     lists:reverse(Acc);
 
-validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp), is_list(Props) ->
+validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Regexp), is_list(Props) ->
     {ok, MP} = re:compile(Regexp),
     Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     validate_props_list(T, [{MP, Props1} | Acc]).
@@ -184,6 +194,9 @@ validate_props_test() ->
               {get_mp("lmq/.*"), [{pack, 0}, {retry, 2}, {timeout, 60}]}]},
         validate_props_list([{"lmq/a", [{retry, 1}]},
                              {"lmq/.*", [{timeout, 60}]}])),
+    ?assertEqual(
+        {ok, [{get_mp(<<"lmq/.*">>), [{pack, 0}, {retry, 1}, {timeout, 30}]}]},
+        validate_props_list([{<<"lmq/.*">>, [{retry, 1}]}])),
     ?assertEqual(
         {error, invalid_syntax},
         validate_props_list([{"lmq/a", {retry, 1}}])).

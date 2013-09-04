@@ -94,6 +94,8 @@ auto_load(_Config) ->
 
 default_props(_Config) ->
     PropsList = [{"lmq", [{retry, 0}]}],
+    [] = lmq_queue_mgr:get_default_props(),
     ok = lmq_queue_mgr:set_default_props(PropsList),
     {ok, PropsList} = lmq_lib:get_lmq_info(default_props),
+    PropsList = lmq_queue_mgr:get_default_props(),
     invalid_syntax = lmq_queue_mgr:set_default_props({}).

@@ -160,3 +160,12 @@ name | type | default | description
 timeout | float   | 30 | メッセージが再送されるまでの時間（秒）
 retry   | integer | 2  | メッセージの再送回数
 pack    | float   | 0  |複数のメッセージをまとめる期間（秒）、0 で無効
+
+### set_default_props(props_list) -> "ok"
+デフォルトプロパティを設定します。既存の内容は完全に上書きされます。
+
+props_list は [[regexp, property], ...] の構造を持つリストです。
+キューの作成時に、新しいキューの名前が regexp にマッチするかを先頭から評価していき、初めてマッチした property を使用します。どのルールにもマッチしなければ、システムのデフォルトを使用します。
+
+### get_default_props() -> props_list
+設定されているデフォルトプロパティを取得する。

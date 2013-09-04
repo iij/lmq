@@ -4,10 +4,11 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
 -export([push_pull_done/1, release/1, props_and_timeout/1, packed_queue/1,
-    push_all/1, pull_any/1]).
+    push_all/1, pull_any/1, default_props/1]).
 
 all() ->
-    [push_pull_done, release, props_and_timeout, packed_queue, push_all, pull_any].
+    [push_pull_done, release, props_and_timeout, packed_queue, push_all, pull_any,
+     default_props].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -106,3 +107,17 @@ pull_any(Config) ->
     {ok, <<"empty">>} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
     [msgpack_rpc_client:call(Client, delete, [N]) || N <- Names].
+
+default_props(Config) ->
+    Client = ?config(client, Config),
+    %% Name = ?config(qname, Config),
+    DefaultProps = [[<<"def/">>, {[{<<"retry">>, 0}, {<<"timeout">>, 0}]}],
+                    [<<"lmq/">>, {[{<<"timeout">>, 0}]}]],
+    %% {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]).
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_default_props, [DefaultProps]),
+    {ok, DefaultProps} = msgpack_rpc_client:call(Client, get_default_props, []),
+    Name = <<"def/a">>,
+    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
+    {ok, {[{<<"id">>, _}, {<<"content">>, 1}]}} =
+        msgpack_rpc_client:call(Client, pull, [Name, 0]),
+    {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0]).
