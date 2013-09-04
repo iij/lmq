@@ -2,7 +2,7 @@
 
 -export([delete/1, push/2, pull/1, pull/2, push_all/2,
     pull_any/1, pull_any/2, done/2, retain/2, release/2,
-    update_props/1, update_props/2, set_default_props/1]).
+    update_props/1, update_props/2, set_default_props/1, get_default_props/0]).
 -include("lmq.hrl").
 
 delete(Name) when is_binary(Name) ->
@@ -108,6 +108,10 @@ set_default_props(PropsList) ->
         Reason -> throw(Reason)
     end.
 
+get_default_props() ->
+    lager:info("lmq_api:get_default_props()"),
+    export_default_props(lmq:get_default_props()).
+
 find(Name) when is_binary(Name) ->
     Name1 = binary_to_atom(Name, latin1),
     case lmq_queue_mgr:get(Name1) of
@@ -146,6 +150,18 @@ normalize_props([{K, V} | T], Acc) ->
 normalize_props([], Acc) ->
     lists:reverse(Acc).
 
+export_props(Props) ->
+    export_props(Props, []).
+
+export_props([{pack, Duration} | T], Acc) ->
+    export_props(T, [{<<"pack">>, Duration / 1000} | Acc]);
+
+export_props([{K, V} | T], Acc) ->
+    export_props(T, [{list_to_binary(atom_to_list(K)), V} | Acc]);
+
+export_props([], Acc) ->
+    {lists:reverse(Acc)}.
+
 normalize_default_props(DefaultProps) ->
     normalize_default_props(DefaultProps, []).
 
@@ -153,6 +169,15 @@ normalize_default_props([[Regexp, Props]|T], Acc) when is_binary(Regexp) ->
     normalize_default_props(T, [{Regexp, normalize_props(Props)} | Acc]);
 
 normalize_default_props([], Acc) ->
+    lists:reverse(Acc).
+
+export_default_props(DefaultProps) ->
+    export_default_props(DefaultProps, []).
+
+export_default_props([{Regexp, Props} | T], Acc) when is_list(Regexp); is_binary(Regexp) ->
+    export_default_props(T, [[Regexp, export_props(Props)] | Acc]);
+
+export_default_props([], Acc) ->
     lists:reverse(Acc).
 
 %% ==================================================================
@@ -167,9 +192,19 @@ normalize_props_test() ->
                                   {<<"pack">>, 0.5}]}),
                  [{retry, 3}, {timeout, 5.0}, {pack, 500}]).
 
+export_props_test() ->
+    ?assertEqual({[{<<"retry">>, 3}, {<<"timeout">>, 5.0}, {<<"pack">>, 0.5}]},
+                 export_props([{retry, 3}, {timeout, 5.0}, {pack, 500}])).
+
 normalize_default_props_test() ->
     ?assertEqual([{<<"lmq">>, [{pack, 1000}]}, {<<"def">>, [{retry, 0}]}],
         normalize_default_props([[<<"lmq">>, {[{<<"pack">>, 1}]}],
                                  [<<"def">>, {[{<<"retry">>, 0}]}]])).
+
+export_default_props_test() ->
+    ?assertEqual([[<<"lmq">>, {[{<<"pack">>, 1.0}]}],
+                  [<<"def">>, {[{<<"retry">>, 0}]}]],
+                 export_default_props([{<<"lmq">>, [{pack, 1000}]},
+                                       {<<"def">>, [{retry, 0}]}])).
 
 -endif.

@@ -115,6 +115,7 @@ default_props(Config) ->
                     [<<"lmq/">>, {[{<<"timeout">>, 0}]}]],
     %% {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]).
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_default_props, [DefaultProps]),
+    {ok, DefaultProps} = msgpack_rpc_client:call(Client, get_default_props, []),
     Name = <<"def/a">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
     {ok, {[{<<"id">>, _}, {<<"content">>, 1}]}} =

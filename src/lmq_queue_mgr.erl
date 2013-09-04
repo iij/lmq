@@ -2,7 +2,7 @@
 
 -behaviour(gen_server).
 -export([start_link/0, queue_started/2, delete/1, get/1, get/2, match/1,
-    set_default_props/1]).
+    set_default_props/1, get_default_props/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -34,6 +34,9 @@ delete(Name) when is_atom(Name) ->
 
 set_default_props(PropsList) ->
     gen_server:call(?MODULE, {set_default_props, PropsList}).
+
+get_default_props() ->
+    gen_server:call(?MODULE, {get_default_props}).
 
 %% ==================================================================
 %% gen_server callbacks
@@ -106,6 +109,13 @@ handle_call({set_default_props, PropsList}, _From, S=#state{}) ->
         {error, Reason} ->
             {reply, Reason, S}
     end;
+
+handle_call({get_default_props}, _From, S=#state{}) ->
+    PropsList = case lmq_lib:get_lmq_info(default_props) of
+        {ok, Value} -> Value;
+        _ -> []
+    end,
+    {reply, PropsList, S};
 
 handle_call(Msg, _From, State) ->
     io:format("Unknown message: ~p~n", [Msg]),
