@@ -5,7 +5,6 @@
     set_default_props/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
--compile([export_all]).
 
 -include("lmq.hrl").
 
@@ -73,8 +72,9 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
         error ->
             case proplists:get_value(create, Opts) of
                 true ->
+                    Base = get_props(Name, S#state.default_props),
                     Props = proplists:get_value(props, Opts, []),
-                    Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
+                    Props1 = lmq_misc:extend(Props, Base),
                     ok = lmq_lib:create(Name, Props1),
                     {ok, Pid} = lmq_queue:start(Name),
                     lager:info("A queue named ~s is created", [Name]),

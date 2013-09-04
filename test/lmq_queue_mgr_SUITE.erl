@@ -58,7 +58,12 @@ get(_Config) ->
 
     %% ensure custom props can be set
     true = is_pid(lmq_queue_mgr:get('get/b', [create, {props, [{retry, infinity}]}])),
-    Expected = lmq_lib:queue_info('get/b').
+    Expected = lmq_lib:queue_info('get/b'),
+
+    %% ensure default props is considered
+    ok = lmq_queue_mgr:set_default_props([{"get/", [{pack, 10}]}]),
+    true = is_pid(lmq_queue_mgr:get('get/c', [create, {props, [{retry, infinity}]}])),
+    [{pack, 10}, {retry, infinity}, {timeout, 30}] = lmq_lib:queue_info('get/b').
 
 match(_Config) ->
     lmq_queue_mgr:get(foo, [create]),
