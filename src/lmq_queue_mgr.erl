@@ -150,7 +150,7 @@ validate_props_list(PropsList) ->
 validate_props_list([], Acc) ->
     lists:reverse(Acc);
 
-validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp), is_list(Props) ->
+validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Regexp), is_list(Props) ->
     {ok, MP} = re:compile(Regexp),
     Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     validate_props_list(T, [{MP, Props1} | Acc]).
@@ -184,6 +184,9 @@ validate_props_test() ->
               {get_mp("lmq/.*"), [{pack, 0}, {retry, 2}, {timeout, 60}]}]},
         validate_props_list([{"lmq/a", [{retry, 1}]},
                              {"lmq/.*", [{timeout, 60}]}])),
+    ?assertEqual(
+        {ok, [{get_mp(<<"lmq/.*">>), [{pack, 0}, {retry, 1}, {timeout, 30}]}]},
+        validate_props_list([{<<"lmq/.*">>, [{retry, 1}]}])),
     ?assertEqual(
         {error, invalid_syntax},
         validate_props_list([{"lmq/a", {retry, 1}}])).
