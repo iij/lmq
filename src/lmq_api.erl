@@ -13,8 +13,10 @@ delete(Name) when is_binary(Name) ->
 
 push(Name, Content) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ...)", [Name]),
-    lmq:push(binary_to_atom(Name, latin1), Content),
-    <<"ok">>.
+    case lmq:push(binary_to_atom(Name, latin1), Content) of
+        packing_started -> <<"packing started">>;
+        Other -> list_to_binary(atom_to_list(Other))
+    end.
 
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),

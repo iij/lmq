@@ -69,13 +69,13 @@ packed_queue(Config) ->
     Name = ?config(qname, Config),
     Props = {[{<<"timeout">>, 0.4}, {<<"pack">>, 0.2}]},
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, update_props, [Name, Props]),
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 2]),
+    {ok, <<"packing started">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
+    {ok, <<"packed">>} = msgpack_rpc_client:call(Client, push, [Name, 2]),
     {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0]),
     timer:sleep(200),
     {ok, {[{<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]),
-    {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 3]),
+    {ok, <<"packing started">>} = msgpack_rpc_client:call(Client, push, [Name, 3]),
     timer:sleep(400),
     {ok, {[{<<"id">>, _}, {<<"content">>, [3]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]),

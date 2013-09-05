@@ -129,18 +129,19 @@ pack_message(Name, Data, Opts) ->
         QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=packing}
                                     <- mnesia:table(Name),
                                     TS >= lmq_misc:unixtime()])),
-        Msg = case qlc:next_answers(QC, 1) of
+        {Ret, Msg} = case qlc:next_answers(QC, 1) of
             [M] -> %% packing process already started
                 Data1 = M#message.data ++ [Data],
-                M#message{data=Data1};
+                {packed, M#message{data=Data1}};
             [] -> %% add new message for packing
                 Retry = proplists:get_value(retry, Opts, infinity),
                 Duration = proplists:get_value(pack, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
-                #message{id=Id, data=[Data], retry=Retry, state=packing}
+                {packing_started, #message{id=Id, data=[Data], retry=Retry, state=packing}}
         end,
         mnesia:write(Name, Msg, write),
-        ok = qlc:delete_cursor(QC)
+        ok = qlc:delete_cursor(QC),
+        Ret
     end).
 
 dequeue(Name, Timeout) ->
