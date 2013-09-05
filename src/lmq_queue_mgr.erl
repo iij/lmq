@@ -43,10 +43,11 @@ get_default_props() ->
 %% ==================================================================
 
 init([]) ->
+    {ok, DefaultProps} = lmq_lib:get_lmq_info(default_props, []),
     lists:foreach(fun(Name) ->
         lmq_queue:start(Name)
     end, lmq_lib:all_queue_names()),
-    {ok, #state{}}.
+    {ok, #state{default_props=DefaultProps}}.
 
 handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     State = case dict:find(Name, S#state.qmap) of

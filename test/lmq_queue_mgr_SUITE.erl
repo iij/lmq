@@ -28,6 +28,9 @@ init_per_testcase(_, Config) ->
     {ok, _} = lmq_queue_supersup:start_link(),
     Config.
 
+end_per_testcase(auto_load, _Config) ->
+    mnesia:transaction(fun() -> mnesia:delete({?LMQ_INFO_TABLE, default_props}) end);
+
 end_per_testcase(_, _Config) ->
     ok.
 
@@ -84,10 +87,13 @@ restart_queue(_Config) ->
     true = Q1 =/= Q2.
 
 auto_load(_Config) ->
+    DefaultProps = [{"lmq", [{retry, 0}]}],
+    lmq_lib:set_lmq_info(default_props, DefaultProps),
     lmq_lib:create(auto_loaded_1),
     lmq_lib:create(auto_loaded_2),
     {ok, _} = lmq_queue_supersup:start_link(),
     timer:sleep(100), % wait until queue will be started
+    DefaultProps = lmq_queue_mgr:get_default_props(),
     true = is_pid(lmq_queue_mgr:get('auto_loaded_1')),
     true = is_pid(lmq_queue_mgr:get('auto_loaded_2')),
     not_found = lmq_queue_mgr:get('auto_loaded_3').

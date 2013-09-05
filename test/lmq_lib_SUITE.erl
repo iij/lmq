@@ -36,7 +36,8 @@ end_per_testcase(_, Config) ->
 lmq_info(_Config) ->
     ok = lmq_lib:set_lmq_info(name, lmq),
     {ok, lmq} = lmq_lib:get_lmq_info(name),
-    {error, not_found} = lmq_lib:get_lmq_info(non_exists).
+    {error, not_found} = lmq_lib:get_lmq_info(non_exists),
+    {ok, []} = lmq_lib:get_lmq_info(non_exists, []).
 
 create_delete(_Config) ->
     ok = lmq_lib:create(test),
