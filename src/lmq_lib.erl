@@ -6,7 +6,7 @@
     get_lmq_info/1, get_lmq_info/2, set_lmq_info/2,
     queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, rfind/2, waittime/1, get_props/1, export_message/1,
+    release/2, first/1, rfind/2, waittime/1, export_message/1,
     get_properties/1, get_properties/2]).
 
 init_mnesia() ->
