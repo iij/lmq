@@ -165,4 +165,11 @@ property(_Config) ->
     P1 = lmq_lib:get_properties(N1),
     P2 = lmq_lib:get_properties(N2),
     P3 = lmq_lib:get_properties(N3),
-    P3 = lmq_lib:get_properties(N2, [{retry, 0}]).
+    P3 = lmq_lib:get_properties(N2, [{retry, 0}]),
+
+    P4 = lmq_misc:extend([{pack, 1}], ?DEFAULT_QUEUE_PROPS),
+    P5 = lmq_misc:extend([{pack, 1}, {retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    lmq_lib:set_lmq_info(default_props, [{"override", [{pack, 1}]}]),
+    P1 = lmq_lib:get_properties(N1),
+    P4 = lmq_lib:get_properties(N2),
+    P5 = lmq_lib:get_properties(N3).
