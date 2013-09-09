@@ -102,7 +102,7 @@ pull_any(Config) ->
     {ok, {[{<<"queue">>, R1}, {<<"id">>, _}, {<<"content">>, R1}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
     {ok, {[{<<"queue">>, R2}, {<<"id">>, _}, {<<"content">>, R2}]}} =
-        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
+        msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
     true = lists:sort([R1, R2]) =:= lists:sort(Names),
     {ok, <<"empty">>} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),

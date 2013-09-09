@@ -58,16 +58,24 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
         dict:store(Id, Q, Acc)
     end, dict:new(), Queues),
     %% waiting for asynchronous response
+    wait_pull_any_response(Mapping, Timeout1).
+
+wait_pull_any_response(Mapping, Timeout) ->
     receive
         {Id, M=#message{}} ->
             {Name, _} = dict:fetch(Id, Mapping),
             cancel_pull(dict:erase(Id, Mapping)),
             {Response} = lmq_lib:export_message(M),
             {[{<<"queue">>, atom_to_binary(Name)} | Response]};
-        {Id, {error, _Reason}} ->
-            cancel_pull(dict:erase(Id, Mapping)),
-            <<"empty">>
-    after Timeout1 ->
+        {Id, {error, Reason}} ->
+            Mapping1 = dict:erase(Id, Mapping),
+            lager:debug("pull_any for ~p: ~p, rest ~p",
+                [element(1, dict:fetch(Id, Mapping)), Reason, dict:size(Mapping1)]),
+            case dict:size(Mapping1) of
+                0 -> <<"empty">>;
+                _ -> wait_pull_any_response(Mapping1, 10)
+            end
+    after Timeout ->
         cancel_pull(Mapping),
         <<"empty">>
     end.
