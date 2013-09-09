@@ -8,7 +8,7 @@
 
 -include("lmq.hrl").
 
--record(state, {sup, qmap=dict:new(), default_props=[]}).
+-record(state, {sup, qmap=dict:new()}).
 
 %% ==================================================================
 %% Public API
@@ -43,11 +43,10 @@ get_default_props() ->
 %% ==================================================================
 
 init([]) ->
-    {ok, DefaultProps} = lmq_lib:get_lmq_info(default_props, []),
     lists:foreach(fun(Name) ->
         lmq_queue:start(Name)
     end, lmq_lib:all_queue_names()),
-    {ok, #state{default_props=DefaultProps}}.
+    {ok, #state{}}.
 
 handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     State = case dict:find(Name, S#state.qmap) of
@@ -76,11 +75,8 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
         error ->
             case proplists:get_value(create, Opts) of
                 true ->
-                    Base = get_props(Name, S#state.default_props),
                     Props = proplists:get_value(props, Opts, []),
-                    Props1 = lmq_misc:extend(Props, Base),
-                    ok = lmq_lib:create(Name, Props1),
-                    {ok, Pid} = lmq_queue:start(Name),
+                    {ok, Pid} = lmq_queue:start(Name, Props),
                     lager:info("A queue named ~s is created", [Name]),
                     {reply, Pid, update_qmap(Name, Pid, S)};
                 undefined ->
@@ -104,9 +100,12 @@ handle_call({match, Regexp}, _From, S=#state{}) ->
 
 handle_call({set_default_props, PropsList}, _From, S=#state{}) ->
     case validate_props_list(PropsList) of
-        {ok, PropsList1} ->
+        {ok, _PropsList} ->
             lmq_lib:set_lmq_info(default_props, PropsList),
-            {reply, ok, S#state{default_props=PropsList1}};
+            dict:fold(fun(_, {Pid, _}, _) ->
+                lmq_queue:reload_properties(Pid)
+            end, ok, S#state.qmap),
+            {reply, ok, S};
         {error, Reason} ->
             {reply, Reason, S}
     end;
@@ -166,18 +165,6 @@ validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Re
     Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     validate_props_list(T, [{MP, Props1} | Acc]).
 
-get_props(_Name, []) ->
-    ?DEFAULT_QUEUE_PROPS;
-
-get_props(Name, PropsList) when is_atom(Name) ->
-    get_props(atom_to_list(Name), PropsList);
-
-get_props(Name, [{MP, Props}|T]) when is_list(Name) ->
-    case re:run(Name, MP) of
-        {match, _} -> Props;
-        _ -> get_props(Name, T)
-    end.
-
 %% ==================================================================
 %% EUnit tests
 %% ==================================================================
@@ -201,12 +188,5 @@ validate_props_test() ->
     ?assertEqual(
         {error, invalid_syntax},
         validate_props_list([{"lmq/a", {retry, 1}}])).
-
-get_props_test() ->
-    Props = [{get_mp("lmq"), [{retry, 0}]}],
-    ?assertEqual([{retry, 0}], get_props(lmq, Props)),
-    ?assertEqual([{retry, 0}], get_props("lmq", Props)),
-    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("foo", Props)),
-    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("lmq", [])).
 
 -endif.

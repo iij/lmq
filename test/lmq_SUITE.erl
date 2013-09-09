@@ -4,10 +4,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([pull/1, update_props/1]).
+-export([pull/1, update_props/1, properties/1]).
 
 all() ->
-    [pull, update_props].
+    [pull, update_props, properties].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -52,3 +52,25 @@ update_props(Config) ->
     ok = lmq:push(Name, 2),
     {[{<<"id">>, _}, {<<"content">>, 2}]} = lmq:pull(Name),
     <<"empty">> = lmq:pull(Name, 0).
+
+properties(_Config) ->
+    N1 = lmq_properies_test_q1,
+    N2 = lmq_properies_test_q2,
+    N3 = lmq_properies_test_q3,
+    P1 = lmq_misc:extend([{retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    P2 = lmq_misc:extend([{retry, 1}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+    P3 = lmq_misc:extend([{retry, 0}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+
+    ok = lmq:push(N1, 1),
+    Q1 = lmq_queue_mgr:get(N1),
+    Q2 = lmq:update_props(N2),
+    Q3 = lmq:update_props(N3, [{retry, 0}]),
+    ?DEFAULT_QUEUE_PROPS = lmq_queue:get_properties(Q1),
+    ?DEFAULT_QUEUE_PROPS = lmq_queue:get_properties(Q2),
+    P1 = lmq_queue:get_properties(Q3),
+
+    lmq:set_default_props([{".*", [{retry, 1}, {timeout, 0}]}]),
+    timer:sleep(50),
+    P2 = lmq_queue:get_properties(Q1),
+    P2 = lmq_queue:get_properties(Q2),
+    P3 = lmq_queue:get_properties(Q3).

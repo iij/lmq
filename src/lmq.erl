@@ -37,7 +37,7 @@ pull(Name, Timeout) when is_atom(Name) ->
     end.
 
 update_props(Name) when is_atom(Name) ->
-    update_props(Name, ?DEFAULT_QUEUE_PROPS).
+    update_props(Name, []).
 
 update_props(Name, Props) when is_atom(Name) ->
     lmq_queue_mgr:get(Name, [create, update, {props, Props}]).

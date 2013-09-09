@@ -1,8 +1,9 @@
 -module(lmq_queue).
 -behaviour(gen_server).
--export([start/1, start_link/1, start_link/2, stop/1,
+-export([start/1, start/2, start_link/1, start_link/2, stop/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2, props/2]).
+    done/2, retain/2, release/2, props/2, get_properties/1,
+    reload_properties/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -13,13 +14,15 @@
 start(Name) ->
     supervisor:start_child(lmq_queue_sup, [Name]).
 
+start(Name, Props) ->
+    supervisor:start_child(lmq_queue_sup, [Name, Props]).
+
 start_link(Name) when is_atom(Name) ->
     case lmq_lib:queue_info(Name) of
-        not_found ->
-            start_link(Name, ?DEFAULT_QUEUE_PROPS);
-        _ ->
-            gen_server:start_link(?MODULE, Name, [])
-    end.
+        not_found -> ok = lmq_lib:create(Name);
+        _ -> ok
+    end,
+    gen_server:start_link(?MODULE, Name, []).
 
 start_link(Name, Props) when is_atom(Name) ->
     ok = lmq_lib:create(Name, Props),
@@ -66,6 +69,12 @@ release(Pid, UUID) ->
 props(Pid, Props) ->
     gen_server:call(Pid, {props, Props}).
 
+get_properties(Pid) ->
+    gen_server:call(Pid, get_properties).
+
+reload_properties(Pid) ->
+    gen_server:cast(Pid, reload_properties).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
@@ -74,7 +83,7 @@ stop(Pid) ->
 %% ==================================================================
 
 init(Name) ->
-    Props = lmq_lib:queue_info(Name),
+    Props = lmq_lib:get_properties(Name),
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
@@ -121,12 +130,24 @@ handle_call({release, UUID}, _From, S=#state{}) ->
 
 handle_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
-    State = S#state{props=Props},
+    Props1 = lmq_lib:get_properties(S#state.name),
+    State = S#state{props=Props1},
     {State1, Sleep} = prepare_sleep(State),
     {reply, ok, State1, Sleep};
 
+handle_call(get_properties, _From, S) ->
+    Props = S#state.props,
+    {State, Sleep} = prepare_sleep(S),
+    {reply, Props, State, Sleep};
+
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
+
+handle_cast(reload_properties, S) ->
+    Props = lmq_lib:get_properties(S#state.name),
+    State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
 
 handle_cast(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),

@@ -5,11 +5,11 @@
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1, packing/1]).
+    limit_retry/1, error_case/1, packing/1, property/1]).
 
 all() ->
     [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case, packing].
+     error_case, packing, property].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -42,11 +42,9 @@ lmq_info(_Config) ->
 create_delete(_Config) ->
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
-    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(test),
+    [] = lmq_lib:queue_info(test),
     ok = lmq_lib:create(test, [{timeout, 10}]),
-    Props = lmq_lib:queue_info(test),
-    10 = proplists:get_value(timeout, Props),
-    2 = proplists:get_value(retry, Props),
+    [{timeout, 10}] = lmq_lib:queue_info(test),
     ok = lmq_lib:delete(test),
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
     not_found = lmq_lib:queue_info(test),
@@ -149,3 +147,29 @@ packing(Config) ->
     empty = lmq_lib:dequeue(Name, Timeout),
     timer:sleep(100),
     [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.data.
+
+property(_Config) ->
+    N1 = property_default,
+    N2 = property_override1,
+    N3 = property_override2,
+    P1 = ?DEFAULT_QUEUE_PROPS,
+    P2 = lmq_misc:extend([{retry, infinity}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+    P3 = lmq_misc:extend([{retry, 0}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+
+    lmq_lib:create(N1),
+    lmq_lib:create(N2),
+    lmq_lib:create(N3, [{retry, 0}]),
+    lmq_lib:set_lmq_info(default_props,
+        [{"override", [{retry, infinity}, {timeout, 0}]}]),
+
+    P1 = lmq_lib:get_properties(N1),
+    P2 = lmq_lib:get_properties(N2),
+    P3 = lmq_lib:get_properties(N3),
+    P3 = lmq_lib:get_properties(N2, [{retry, 0}]),
+
+    P4 = lmq_misc:extend([{pack, 1}], ?DEFAULT_QUEUE_PROPS),
+    P5 = lmq_misc:extend([{pack, 1}, {retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    lmq_lib:set_lmq_info(default_props, [{"override", [{pack, 1}]}]),
+    P1 = lmq_lib:get_properties(N1),
+    P4 = lmq_lib:get_properties(N2),
+    P5 = lmq_lib:get_properties(N3).
