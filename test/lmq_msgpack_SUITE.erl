@@ -96,6 +96,8 @@ push_all(Config) ->
 pull_any(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
+    Props = {[{<<"retry">>, 0}]},
+    [msgpack_rpc_client:call(Client, update_props, [Name, Props]) || Name <- Names],
     [msgpack_rpc_client:call(Client, push, [Name, Name]) || Name <- Names],
     {ok, {[{<<"queue">>, R1}, {<<"id">>, _}, {<<"content">>, R1}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),

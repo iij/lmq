@@ -71,11 +71,19 @@ done(Config) ->
 
 release(Config) ->
     Name = ?config(qname, Config),
-    ok = lmq_lib:enqueue(Name, make_ref()),
+    ok = lmq_lib:enqueue(Name, make_ref(), [{retry, 2}]),
     M = lmq_lib:dequeue(Name, 30),
+    1 = M#message.retry,
     {_, UUID} = M#message.id,
     ok = lmq_lib:release(Name, UUID),
-    not_found = lmq_lib:release(Name, UUID).
+    not_found = lmq_lib:release(Name, UUID),
+    1 = (lmq_lib:dequeue(Name, 30))#message.retry,
+
+    ok = lmq_lib:enqueue(Name, make_ref()),
+    M2 = lmq_lib:dequeue(Name, 30),
+    infinity = M2#message.retry,
+    ok = lmq_lib:release(Name, element(2, M2#message.id)),
+    infinity = (lmq_lib:dequeue(Name, 30))#message.retry.
 
 retain(Config) ->
     Name = ?config(qname, Config),

@@ -201,7 +201,11 @@ release(Name, UUID) ->
             #message{id={TS, UUID}} when TS < Now ->
                 not_found;
             #message{state=processing}=M ->
-                M1 = M#message{id={Now, UUID}, state=available},
+                R = case M#message.retry of
+                    infinity -> infinity;
+                    N when is_integer(N) -> N + 1
+                end,
+                M1 = M#message{id={Now, UUID}, state=available, retry=R},
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
             _ ->
