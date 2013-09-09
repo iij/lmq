@@ -74,7 +74,7 @@ match(_Config) ->
     Q2 = lmq_queue_mgr:get('foo/baz', [create]),
     R = lmq_queue_mgr:match("^foo/.*"),
     R = lmq_queue_mgr:match(<<"^foo/.*">>),
-    true = lists:sort([Q1, Q2]) =:= lists:sort(R),
+    true = lists:sort([{'foo/bar', Q1}, {'foo/baz', Q2}]) =:= lists:sort(R),
     %% error case
     [] = lmq_queue_mgr:match("AAA"),
     {error, invalid_regexp} = lmq_queue_mgr:match("a[1-").
