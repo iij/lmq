@@ -15,11 +15,10 @@ start(Name) ->
 
 start_link(Name) when is_atom(Name) ->
     case lmq_lib:queue_info(Name) of
-        not_found ->
-            start_link(Name, ?DEFAULT_QUEUE_PROPS);
-        _ ->
-            gen_server:start_link(?MODULE, Name, [])
-    end.
+        not_found -> ok = lmq_lib:create(Name);
+        _ -> ok
+    end,
+    gen_server:start_link(?MODULE, Name, []).
 
 start_link(Name, Props) when is_atom(Name) ->
     ok = lmq_lib:create(Name, Props),
@@ -74,7 +73,7 @@ stop(Pid) ->
 %% ==================================================================
 
 init(Name) ->
-    Props = lmq_lib:queue_info(Name),
+    Props = lmq_lib:get_properties(Name),
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
@@ -121,7 +120,8 @@ handle_call({release, UUID}, _From, S=#state{}) ->
 
 handle_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
-    State = S#state{props=Props},
+    Props1 = lmq_lib:get_properties(S#state.name),
+    State = S#state{props=Props1},
     {State1, Sleep} = prepare_sleep(State),
     {reply, ok, State1, Sleep};
 

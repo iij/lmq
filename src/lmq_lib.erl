@@ -6,7 +6,8 @@
     get_lmq_info/1, get_lmq_info/2, set_lmq_info/2,
     queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, rfind/2, waittime/1, get_props/1, export_message/1]).
+    release/2, first/1, rfind/2, waittime/1, get_props/1, export_message/1,
+    get_properties/1, get_properties/2]).
 
 init_mnesia() ->
     application:stop(mnesia),
@@ -83,13 +84,12 @@ create(Name) when is_atom(Name) ->
     create(Name, []).
 
 create(Name, Props) when is_atom(Name) ->
-    Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
         {record_name, message}
     ],
-    Info = #queue_info{name=Name, props=Props1},
+    Info = #queue_info{name=Name, props=Props},
     F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
 
     case mnesia:create_table(Name, Def) of
@@ -269,6 +269,17 @@ transaction(F) ->
         {aborted, {no_exists, _}} -> {error, no_queue_exists};
         {aborted, Reason} -> {error, Reason}
     end.
+
+get_properties(Name) ->
+    Base = get_props(Name),
+    case lmq_lib:queue_info(Name) of
+        not_found -> Base;
+        Props -> lmq_misc:extend(Props, Base)
+    end.
+
+get_properties(Name, Override) ->
+    Props = get_properties(Name),
+    lmq_misc:extend(Override, Props).
 
 get_props(Name) ->
     {ok, DefaultProps} = get_lmq_info(default_props, []),
