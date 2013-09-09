@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 -export([start/1, start/2, start_link/1, start_link/2, stop/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2, props/2]).
+    done/2, retain/2, release/2, props/2, get_properties/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -68,6 +68,9 @@ release(Pid, UUID) ->
 props(Pid, Props) ->
     gen_server:call(Pid, {props, Props}).
 
+get_properties(Pid) ->
+    gen_server:call(Pid, get_properties).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
@@ -127,6 +130,11 @@ handle_call({props, Props}, _From, S=#state{}) ->
     State = S#state{props=Props1},
     {State1, Sleep} = prepare_sleep(State),
     {reply, ok, State1, Sleep};
+
+handle_call(get_properties, _From, S) ->
+    Props = S#state.props,
+    {State, Sleep} = prepare_sleep(S),
+    {reply, Props, State, Sleep};
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
