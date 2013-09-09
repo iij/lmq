@@ -6,7 +6,7 @@
     get_lmq_info/1, get_lmq_info/2, set_lmq_info/2,
     queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, rfind/2, waittime/1, export_message/1]).
+    release/2, first/1, rfind/2, waittime/1, get_props/1, export_message/1]).
 
 init_mnesia() ->
     application:stop(mnesia),
@@ -270,14 +270,42 @@ transaction(F) ->
         {aborted, Reason} -> {error, Reason}
     end.
 
+get_props(Name) ->
+    {ok, DefaultProps} = get_lmq_info(default_props, []),
+    get_props(Name, DefaultProps).
+
+get_props(_Name, []) ->
+    ?DEFAULT_QUEUE_PROPS;
+
+get_props(Name, PropsList) when is_atom(Name) ->
+    get_props(atom_to_list(Name), PropsList);
+
+get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
+    {ok, MP} = re:compile(Regexp),
+    case re:run(Name, MP) of
+        {match, _} -> lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS);
+        _ -> get_props(Name, T)
+    end.
+
 export_message(M=#message{}) ->
     {_, UUID} = M#message.id,
     UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
     {[{<<"id">>, UUID1}, {<<"content">>, M#message.data}]}.
 
+%% ==================================================================
+%% EUnit tests
+%% ==================================================================
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+get_props_test() ->
+    DefaultProps = [{"lmq", [{retry, 0}]}],
+    Props = lmq_misc:extend([{retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    ?assertEqual(Props, get_props(lmq, DefaultProps)),
+    ?assertEqual(Props, get_props("lmq", DefaultProps)),
+    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("foo", DefaultProps)),
+    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("lmq", [])).
 
 export_message_test() ->
     Ref = make_ref(),
