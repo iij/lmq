@@ -76,7 +76,7 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 <dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
 </dl>
 
-#### pull(name[, timeout]) -> {"id": id, "content": content} | "empty"
+#### pull(name[, timeout]) -> {"queue": name, "id": id, "content": content} | "empty"
 指定したキューからメッセージを取り出します。キューがなければ作成します。
 
 timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
@@ -97,7 +97,7 @@ timeout を指定し、タイムアウトした時は `empty` 文字列が返り
 <dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
 </dl>
 
-#### pull_any(regexp[, timeout]) -> {"id": id, "content": content} | "empty"
+#### pull_any(regexp[, timeout]) -> {"queue": name, "id": id, "content": content} | "empty"
 
 正規表現にマッチするキューの中から、最も早く取り出せたメッセージを取得します。
 
@@ -106,6 +106,7 @@ timeout を指定し、タイムアウトした時は `empty` 文字列が返り
 <dl>
 <dt>regexp (string)</dt><dd>正規表現</dd>
 <dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
+<dt>name (string)</dt><dd>キューの名前</dd>
 <dt>id (string)</dt><dd>メッセージの ID</dd>
 <dt>content</dt><dd>push() により投入されたデータ</dd>
 </dl>
