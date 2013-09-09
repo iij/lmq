@@ -91,9 +91,9 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
 handle_call({match, Regexp}, _From, S=#state{}) ->
     R = case re:compile(Regexp) of
         {ok, MP} ->
-            dict:fold(fun(Key, {Pid, _}, Acc) ->
-                case re:run(atom_to_list(Key), MP) of
-                    {match, _} -> [Pid | Acc];
+            dict:fold(fun(Name, {Pid, _}, Acc) ->
+                case re:run(atom_to_list(Name), MP) of
+                    {match, _} -> [{Name, Pid} | Acc];
                     _ -> Acc
                 end
             end, [], S#state.qmap);

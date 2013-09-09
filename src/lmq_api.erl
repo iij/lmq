@@ -32,7 +32,7 @@ push_all(Regexp, Content) when is_binary(Regexp) ->
         {error, Reason} -> throw(Reason);
         Other -> Other
     end,
-    [lmq_queue:push(Q, Content) || Q <- Queues],
+    [lmq_queue:push(Pid, Content) || {_, Pid} <- Queues],
     <<"ok">>.
 
 pull_any(Regexp) ->
@@ -49,15 +49,17 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
         {error, Reason} -> throw(Reason);
         Other -> Other
     end,
-    Mapping = lists:foldl(fun(Q, Acc) ->
-        Id = lmq_queue:pull_async(Q, Timeout),
+    Mapping = lists:foldl(fun({_, Pid}=Q, Acc) ->
+        Id = lmq_queue:pull_async(Pid, Timeout),
         dict:store(Id, Q, Acc)
     end, dict:new(), Queues),
     %% waiting for asynchronous response
     receive
         {Id, M=#message{}} ->
+            {Name, _} = dict:fetch(Id, Mapping),
             cancel_pull(dict:erase(Id, Mapping)),
-            lmq_lib:export_message(M);
+            {Response} = lmq_lib:export_message(M),
+            {[{<<"queue">>, atom_to_binary(Name)} | Response]};
         {Id, {error, _Reason}} ->
             cancel_pull(dict:erase(Id, Mapping)),
             <<"empty">>
@@ -122,15 +124,15 @@ find(Name) when is_binary(Name) ->
     end.
 
 cancel_pull(Mapping) ->
-    dict:map(fun(I, Q) -> lmq_queue:pull_cancel(Q, I) end, Mapping),
+    dict:map(fun(Id, {_, Pid}) -> lmq_queue:pull_cancel(Pid, Id) end, Mapping),
     release_messages(Mapping).
 
 release_messages(Mapping) ->
     receive
         {Id, M=#message{}} ->
-            Q = dict:fetch(Id, Mapping),
+            {_, Pid} = dict:fetch(Id, Mapping),
             {_, UUID} = M#message.id,
-            lmq_queue:release(Q, UUID),
+            lmq_queue:release(Pid, UUID),
             release_messages(Mapping);
         {_Id, {error, _Reason}} ->
             ok
@@ -140,6 +142,9 @@ release_messages(Mapping) ->
 
 convert_uuid(UUID) when is_binary(UUID) ->
     uuid:string_to_uuid(binary_to_list(UUID)).
+
+atom_to_binary(Atom) when is_atom(Atom) ->
+    list_to_binary(atom_to_list(Atom)).
 
 normalize_props({Props}) ->
     %% jiffy style to proplists
@@ -188,6 +193,9 @@ export_default_props([], Acc) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+atom_to_binary_test() ->
+    ?assertEqual(<<"foo">>, atom_to_binary(foo)).
 
 normalize_props_test() ->
     ?assertEqual(normalize_props({[{<<"retry">>, 3}, {<<"timeout">>, 5.0},

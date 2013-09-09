@@ -97,9 +97,9 @@ pull_any(Config) ->
     Client = ?config(client, Config),
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
     [msgpack_rpc_client:call(Client, push, [Name, Name]) || Name <- Names],
-    {ok, {[{<<"id">>, _}, {<<"content">>, R1}]}} =
+    {ok, {[{<<"queue">>, R1}, {<<"id">>, _}, {<<"content">>, R1}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0]),
-    {ok, {[{<<"id">>, _}, {<<"content">>, R2}]}} =
+    {ok, {[{<<"queue">>, R2}, {<<"id">>, _}, {<<"content">>, R2}]}} =
         msgpack_rpc_client:call(Client, pull_any, [<<"lmq/.*">>, 0.2]),
     true = lists:sort([R1, R2]) =:= lists:sort(Names),
     {ok, <<"empty">>} =
