@@ -9,7 +9,7 @@
     default_props/1]).
 
 all() ->
-    [multi_queue, match, restart_queue, auto_load, default_props].
+    [multi_queue, get, match, restart_queue, auto_load, default_props].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -55,7 +55,7 @@ get(_Config) ->
     ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info('get/a'),
 
     %% ensure override props if setting update flag
-    Expected = lib_misc:extend([{retry, infinity}], ?DEFAULT_QUEUE_PROPS),
+    Expected = lmq_misc:extend([{retry, infinity}], ?DEFAULT_QUEUE_PROPS),
     true = is_pid(lmq_queue_mgr:get('get/a', [update, {props, [{retry, infinity}]}])),
     Expected = lmq_lib:queue_info('get/a'),
 
@@ -66,7 +66,7 @@ get(_Config) ->
     %% ensure default props is considered
     ok = lmq_queue_mgr:set_default_props([{"get/", [{pack, 10}]}]),
     true = is_pid(lmq_queue_mgr:get('get/c', [create, {props, [{retry, infinity}]}])),
-    [{pack, 10}, {retry, infinity}, {timeout, 30}] = lmq_lib:queue_info('get/b').
+    [{pack, 10}, {retry, infinity}, {timeout, 30}] = lmq_lib:queue_info('get/c').
 
 match(_Config) ->
     lmq_queue_mgr:get(foo, [create]),
