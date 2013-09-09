@@ -117,7 +117,7 @@ enqueue(Name, Data) ->
 enqueue(Name, Data, Opts) ->
     case proplists:get_value(pack, Opts, 0) == 0 of
         true ->
-            Retry = proplists:get_value(retry, Opts, infinity),
+            Retry = increment(proplists:get_value(retry, Opts, infinity)),
             Msg = #message{data=Data, retry=Retry},
             transaction(fun() -> mnesia:write(Name, Msg, write) end);
         false -> %% Packed duration in milliseconds
@@ -134,7 +134,7 @@ pack_message(Name, Data, Opts) ->
                 Data1 = M#message.data ++ [Data],
                 {packed, M#message{data=Data1}};
             [] -> %% add new message for packing
-                Retry = proplists:get_value(retry, Opts, infinity),
+                Retry = increment(proplists:get_value(retry, Opts, infinity)),
                 Duration = proplists:get_value(pack, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
                 {packing_started, #message{id=Id, data=[Data], retry=Retry, state=packing}}
@@ -166,15 +166,21 @@ get_first_message(Name, Timeout) ->
                             NewMsg = M#message{id=NewId, state=processing},
                             mnesia:write(Name, NewMsg, write),
                             NewMsg;
-                        N when N < 0 ->
-                            get_first_message(Name, Timeout);
-                        N ->
+                        N when N > 0 ->
                             NewMsg = M#message{id=NewId, state=processing, retry=N-1},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg
+                            NewMsg;
+                        _ ->
+                            get_first_message(Name, Timeout)
                     end
             end
     end.
+
+increment(infinity) ->
+    infinity;
+
+increment(Number) when is_integer(Number) ->
+    Number + 1.
 
 done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
@@ -200,12 +206,8 @@ release(Name, UUID) ->
                 not_found;
             #message{id={TS, UUID}} when TS < Now ->
                 not_found;
-            #message{state=processing}=M ->
-                R = case M#message.retry of
-                    infinity -> infinity;
-                    N when is_integer(N) -> N + 1
-                end,
-                M1 = M#message{id={Now, UUID}, state=available, retry=R},
+            #message{state=processing, retry=R}=M ->
+                M1 = M#message{id={Now, UUID}, state=available, retry=increment(R)},
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
             _ ->
