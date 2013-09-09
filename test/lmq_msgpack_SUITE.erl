@@ -37,7 +37,7 @@ push_pull_done(Config) ->
     Content = <<"test data">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
-    {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
+    {[{<<"queue">>, Name}, {<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, retain, [Name, UUID]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, done, [Name, UUID]).
 
@@ -47,11 +47,11 @@ release(Config) ->
     Content = <<"test data 2">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, Content]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name]),
-    {[{<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
+    {[{<<"queue">>, Name}, {<<"id">>, UUID}, {<<"content">>, Content}]} = Res,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, release, [Name, UUID]),
     {error, _} = msgpack_rpc_client:call(Client, done, [Name, UUID]),
     {ok, Res1} = msgpack_rpc_client:call(Client, pull, [Name]),
-    {[{<<"id">>, UUID1}, {<<"content">>, Content}]} = Res1,
+    {[{<<"queue">>, Name}, {<<"id">>, UUID1}, {<<"content">>, Content}]} = Res1,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, done, [Name, UUID1]).
 
 props_and_timeout(Config) ->
@@ -61,7 +61,7 @@ props_and_timeout(Config) ->
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, update_props, [Name, Props]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, <<"test">>]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]),
-    {[{<<"id">>, _UUID}, {<<"content">>, <<"test">>}]} = Res,
+    {[{<<"queue">>, Name}, {<<"id">>, _UUID}, {<<"content">>, <<"test">>}]} = Res,
     {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]).
 
 packed_queue(Config) ->
@@ -73,13 +73,13 @@ packed_queue(Config) ->
     {ok, <<"packed">>} = msgpack_rpc_client:call(Client, push, [Name, 2]),
     {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0]),
     timer:sleep(200),
-    {ok, {[{<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
+    {ok, {[{<<"queue">>, Name}, {<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]),
     {ok, <<"packing started">>} = msgpack_rpc_client:call(Client, push, [Name, 3]),
     timer:sleep(400),
-    {ok, {[{<<"id">>, _}, {<<"content">>, [3]}]}} =
+    {ok, {[{<<"queue">>, Name}, {<<"id">>, _}, {<<"content">>, [3]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]),
-    {ok, {[{<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
+    {ok, {[{<<"queue">>, Name}, {<<"id">>, _}, {<<"content">>, [1, 2]}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]).
 
 push_all(Config) ->
@@ -87,9 +87,9 @@ push_all(Config) ->
     Names = [<<"lmq/foo">>, <<"lmq/bar">>],
     [msgpack_rpc_client:call(Client, update_props, [Name]) || Name <- Names],
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push_all, [<<"lmq/.*">>, <<"data">>]),
-    {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
+    {ok, {[{<<"queue">>, <<"lmq/foo">>}, {<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
         msgpack_rpc_client:call(Client, pull, [<<"lmq/foo">>, 0]),
-    {ok, {[{<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
+    {ok, {[{<<"queue">>, <<"lmq/bar">>}, {<<"id">>, _}, {<<"content">>, <<"data">>}]}} =
         msgpack_rpc_client:call(Client, pull, [<<"lmq/bar">>, 0]),
     [msgpack_rpc_client:call(Client, delete, [N]) || N <- Names].
 
@@ -118,6 +118,6 @@ default_props(Config) ->
     {ok, DefaultProps} = msgpack_rpc_client:call(Client, get_default_props, []),
     Name = <<"def/a">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
-    {ok, {[{<<"id">>, _}, {<<"content">>, 1}]}} =
+    {ok, {[{<<"queue">>, Name}, {<<"id">>, _}, {<<"content">>, 1}]}} =
         msgpack_rpc_client:call(Client, pull, [Name, 0]),
     {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0]).
