@@ -134,7 +134,7 @@ handle_cast(Msg, State) ->
 
 handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
-    lager:debug("number of waitings: ~p", [queue:len(NewState#state.waiting)]),
+    lager:debug("number of waitings in ~p: ~p", [S#state.name, queue:len(NewState#state.waiting)]),
     {State, Sleep} = prepare_sleep(NewState),
     {noreply, State, Sleep};
 
@@ -219,7 +219,7 @@ prepare_sleep(S=#state{}) ->
                 0 -> {S, 0};
                 T ->
                     %% remove invalid waitings before sleeping
-                    F = fun(W=#waiting{}) ->
+                    Waitings = queue:filter(fun(W=#waiting{}) ->
                         case wait_valid(W) of
                             true -> true;
                             false ->
@@ -229,7 +229,10 @@ prepare_sleep(S=#state{}) ->
                                 end,
                                 false
                         end
-                    end,
-                    {S#state{waiting=queue:filter(F, S#state.waiting)}, T}
+                    end, S#state.waiting),
+                    case queue:is_empty(Waitings) of
+                        true -> {S#state{waiting=Waitings}, infinity};
+                        false -> {S#state{waiting=Waitings}, T}
+                    end
             end
     end.
