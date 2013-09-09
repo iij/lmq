@@ -2,7 +2,8 @@
 -behaviour(gen_server).
 -export([start/1, start/2, start_link/1, start_link/2, stop/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2, props/2, get_properties/1]).
+    done/2, retain/2, release/2, props/2, get_properties/1,
+    reload_properties/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -71,6 +72,9 @@ props(Pid, Props) ->
 get_properties(Pid) ->
     gen_server:call(Pid, get_properties).
 
+reload_properties(Pid) ->
+    gen_server:cast(Pid, reload_properties).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
@@ -138,6 +142,12 @@ handle_call(get_properties, _From, S) ->
 
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
+
+handle_cast(reload_properties, S) ->
+    Props = lmq_lib:get_properties(S#state.name),
+    State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
 
 handle_cast(Msg, State) ->
     io:format("Unknown message received: ~p~n", [Msg]),

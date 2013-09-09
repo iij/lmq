@@ -102,6 +102,9 @@ handle_call({set_default_props, PropsList}, _From, S=#state{}) ->
     case validate_props_list(PropsList) of
         {ok, _PropsList} ->
             lmq_lib:set_lmq_info(default_props, PropsList),
+            dict:fold(fun(_, {Pid, _}, _) ->
+                lmq_queue:reload_properties(Pid)
+            end, ok, S#state.qmap),
             {reply, ok, S};
         {error, Reason} ->
             {reply, Reason, S}
