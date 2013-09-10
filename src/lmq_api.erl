@@ -66,7 +66,7 @@ wait_pull_any_response(Mapping, Timeout) ->
             {Name, _} = dict:fetch(Id, Mapping),
             cancel_pull(dict:erase(Id, Mapping)),
             {Response} = lmq_lib:export_message(M),
-            {[{<<"queue">>, atom_to_binary(Name)} | Response]};
+            {[{<<"queue">>, atom_to_binary(Name, latin1)} | Response]};
         {Id, {error, Reason}} ->
             Mapping1 = dict:erase(Id, Mapping),
             lager:debug("pull_any for ~p: ~p, rest ~p",
@@ -155,9 +155,6 @@ release_messages(Mapping) ->
 convert_uuid(UUID) when is_binary(UUID) ->
     uuid:string_to_uuid(binary_to_list(UUID)).
 
-atom_to_binary(Atom) when is_atom(Atom) ->
-    list_to_binary(atom_to_list(Atom)).
-
 normalize_props({Props}) ->
     %% jiffy style to proplists
     normalize_props(Props, []).
@@ -205,9 +202,6 @@ export_default_props([], Acc) ->
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
-
-atom_to_binary_test() ->
-    ?assertEqual(<<"foo">>, atom_to_binary(foo)).
 
 normalize_props_test() ->
     ?assertEqual(normalize_props({[{<<"retry">>, 3}, {<<"timeout">>, 5.0},
