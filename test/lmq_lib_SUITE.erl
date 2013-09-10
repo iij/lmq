@@ -108,12 +108,12 @@ limit_retry(Config) ->
     Ref = make_ref(),
     %% retry 5 times, that means dequeue succeed 6 times
     ok = lmq_lib:enqueue(Name, Ref, [{retry, 5}]),
-    lists:all(fun(M) -> Ref =:= M#message.data end,
+    lists:all(fun(M) -> Ref =:= M#message.content end,
         [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 6)]),
     empty = lmq_lib:dequeue(Name, Timeout),
     %% retry infinity
     ok = lmq_lib:enqueue(Name, Ref),
-    lists:all(fun(M) -> Ref =:= M#message.data end,
+    lists:all(fun(M) -> Ref =:= M#message.content end,
         [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 10)]).
 
 error_case(_Config) ->
@@ -131,22 +131,22 @@ packing(Config) ->
     R1 = make_ref(), R2 = make_ref(), R3 = make_ref(),
     %% 0 means not packing
     ok = lmq_lib:enqueue(Name, R1, [{pack, 0}]),
-    R1 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    R1 = (lmq_lib:dequeue(Name, Timeout))#message.content,
 
     %% get 2 packages, each package contains 1 message
     packing_started = lmq_lib:enqueue(Name, R1, [{pack, 1}]), timer:sleep(1),
     packing_started = lmq_lib:enqueue(Name, R2, [{pack, 1}]), timer:sleep(1),
-    [R1] = (lmq_lib:dequeue(Name, Timeout))#message.data,
-    [R2] = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    [R1] = (lmq_lib:dequeue(Name, Timeout))#message.content,
+    [R2] = (lmq_lib:dequeue(Name, Timeout))#message.content,
 
     %% packing and no packing message
     packing_started = lmq_lib:enqueue(Name, R1, [{pack, 100}]),
     packed = lmq_lib:enqueue(Name, R2, [{pack, 100}]),
     ok = lmq_lib:enqueue(Name, R3),
-    R3 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    R3 = (lmq_lib:dequeue(Name, Timeout))#message.content,
     empty = lmq_lib:dequeue(Name, Timeout),
     timer:sleep(100),
-    [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.data.
+    [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.content.
 
 property(_Config) ->
     N1 = property_default,

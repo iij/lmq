@@ -42,8 +42,8 @@ multi_queue(_Config) ->
     lmq_queue:push(Q2, R2),
     M2 = lmq_queue:pull(Q2),
     M1 = lmq_queue:pull(Q1),
-    R1 = M1#message.data,
-    R2 = M2#message.data.
+    R1 = M1#message.content,
+    R2 = M2#message.content.
 
 get(_Config) ->
     not_found = lmq_queue_mgr:get('get/a'),

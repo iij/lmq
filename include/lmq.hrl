@@ -1,5 +1,5 @@
 -record(message, {id={lmq_misc:unixtime(), uuid:get_v4()},
-                  state=available, type=normal, retry, data}).
+                  state=available, type=normal, retry, content}).
 -record(queue_info, {name, props}).
 -record(lmq_info, {key, value}).
 

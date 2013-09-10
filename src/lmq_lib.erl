@@ -111,34 +111,34 @@ delete(Name) when is_atom(Name) ->
             lager:error("Failed to delete table '~p': ~p", [Name, Other])
     end.
 
-enqueue(Name, Data) ->
-    enqueue(Name, Data, []).
+enqueue(Name, Content) ->
+    enqueue(Name, Content, []).
 
-enqueue(Name, Data, Opts) ->
+enqueue(Name, Content, Opts) ->
     case proplists:get_value(pack, Opts, 0) == 0 of
         true ->
             Retry = increment(proplists:get_value(retry, Opts, infinity)),
-            Msg = #message{data=Data, retry=Retry},
+            Msg = #message{content=Content, retry=Retry},
             transaction(fun() -> mnesia:write(Name, Msg, write) end);
         false -> %% Packed duration in milliseconds
-            pack_message(Name, Data, Opts)
+            pack_message(Name, Content, Opts)
     end.
 
-pack_message(Name, Data, Opts) ->
+pack_message(Name, Content, Opts) ->
     transaction(fun() ->
         QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=packing}
                                     <- mnesia:table(Name),
                                     TS >= lmq_misc:unixtime()])),
         {Ret, Msg} = case qlc:next_answers(QC, 1) of
             [M] -> %% packing process already started
-                Data1 = M#message.data ++ [Data],
-                {packed, M#message{data=Data1}};
+                Content1 = M#message.content ++ [Content],
+                {packed, M#message{content=Content1}};
             [] -> %% add new message for packing
                 Retry = increment(proplists:get_value(retry, Opts, infinity)),
                 Duration = proplists:get_value(pack, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
                 {packing_started, #message{id=Id, state=packing, type=package,
-                                           retry=Retry, data=[Data]}}
+                                           retry=Retry, content=[Content]}}
         end,
         mnesia:write(Name, Msg, write),
         ok = qlc:delete_cursor(QC),
@@ -302,7 +302,7 @@ get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
 export_message(M=#message{}) ->
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
     {[{<<"id">>, UUID}, {<<"type">>, atom_to_binary(M#message.type, latin1)},
-      {<<"content">>, M#message.data}]}.
+      {<<"content">>, M#message.content}]}.
 
 %% ==================================================================
 %% EUnit tests
@@ -321,7 +321,7 @@ get_props_test() ->
 
 export_message_test() ->
     Ref = make_ref(),
-    M = #message{data=Ref},
+    M = #message{content=Ref},
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
     ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
                    {<<"content">>, Ref}]},

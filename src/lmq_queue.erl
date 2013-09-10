@@ -28,8 +28,8 @@ start_link(Name, Props) when is_atom(Name) ->
     ok = lmq_lib:create(Name, Props),
     gen_server:start_link(?MODULE, Name, []).
 
-push(Pid, Data) ->
-    gen_server:call(Pid, {push, Data}).
+push(Pid, Content) ->
+    gen_server:call(Pid, {push, Content}).
 
 pull(Pid) ->
     gen_server:call(Pid, {pull, infinity}, infinity).
@@ -138,13 +138,13 @@ terminate(_Reason, _State) ->
 %% Private functions
 %% ==================================================================
 
-handle_queue_call({push, Data}, _From, S=#state{}) ->
+handle_queue_call({push, Content}, _From, S=#state{}) ->
     Retry = proplists:get_value(retry, S#state.props),
     Opts = case proplists:get_value(pack, S#state.props) of
         T when is_integer(T) -> [{retry, Retry}, {pack, T}];
         _ -> [{retry, Retry}]
     end,
-    R = lmq_lib:enqueue(S#state.name, Data, Opts),
+    R = lmq_lib:enqueue(S#state.name, Content, Opts),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
