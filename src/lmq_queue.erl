@@ -88,63 +88,64 @@ init(Name) ->
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
-handle_call({push, Data}, _From, S=#state{}) ->
+handle_call(stop, _From, State) ->
+    lager:info("Stopping the queue: ~s ~p", [State#state.name, self()]),
+    {stop, normal, ok, State};
+
+handle_call(Msg, From, State) ->
+    case handle_queue_call(Msg, From, State) of
+        {reply, Reply, State1} ->
+            {State2, Sleep} = prepare_sleep(State1),
+            {reply, Reply, State2, Sleep};
+        {noreply, State1} ->
+            {State2, Sleep} = prepare_sleep(State1),
+            {noreply, State2, Sleep}
+    end.
+
+handle_queue_call({push, Data}, _From, S=#state{}) ->
     Retry = proplists:get_value(retry, S#state.props),
     Opts = case proplists:get_value(pack, S#state.props) of
         T when is_integer(T) -> [{retry, Retry}, {pack, T}];
         _ -> [{retry, Retry}]
     end,
     R = lmq_lib:enqueue(S#state.name, Data, Opts),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
+    {reply, R, S};
 
-handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
+handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
     State = add_waiting(From, Pid, Timeout, S),
-    {State1, Sleep} = prepare_sleep(State),
-    {noreply, State1, Sleep};
+    {noreply, State};
 
-handle_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
+handle_queue_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
     State = add_waiting(Pid, Timeout, S),
     Ref = (queue:get_r(State#state.waiting))#waiting.ref,
-    {State1, Sleep} = prepare_sleep(State),
-    {reply, Ref, State1, Sleep};
+    {reply, Ref, State};
 
-handle_call({pull_cancel, Ref}, _From, S=#state{}) ->
+handle_queue_call({pull_cancel, Ref}, _From, S=#state{}) ->
     State = remove_waiting(Ref, S),
-    {State1, Sleep} = prepare_sleep(State),
-    {reply, ok, State1, Sleep};
+    {reply, ok, State};
 
-handle_call({done, UUID}, _From, S=#state{}) ->
+handle_queue_call({done, UUID}, _From, S=#state{}) ->
     R = lmq_lib:done(S#state.name, UUID),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
+    {reply, R, S};
 
-handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
+handle_queue_call({retain, UUID}, _From, S=#state{props=Props}) ->
     R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
+    {reply, R, S};
 
-handle_call({release, UUID}, _From, S=#state{}) ->
+handle_queue_call({release, UUID}, _From, S=#state{}) ->
     R = lmq_lib:release(S#state.name, UUID),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
+    {reply, R, S};
 
-handle_call({props, Props}, _From, S=#state{}) ->
+handle_queue_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
     Props1 = lmq_lib:get_properties(S#state.name),
     lager:info("Update queue properties: ~s ~p", [S#state.name, Props1]),
     State = S#state{props=Props1},
-    {State1, Sleep} = prepare_sleep(State),
-    {reply, ok, State1, Sleep};
+    {reply, ok, State};
 
-handle_call(get_properties, _From, S) ->
+handle_queue_call(get_properties, _From, S) ->
     Props = S#state.props,
-    {State, Sleep} = prepare_sleep(S),
-    {reply, Props, State, Sleep};
-
-handle_call(stop, _From, State) ->
-    lager:info("Stopping the queue: ~s ~p", [State#state.name, self()]),
-    {stop, normal, ok, State}.
+    {reply, Props, S}.
 
 handle_cast(reload_properties, S) ->
     Props = lmq_lib:get_properties(S#state.name),
