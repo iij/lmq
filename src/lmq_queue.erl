@@ -102,6 +102,42 @@ handle_call(Msg, From, State) ->
             {noreply, State2, Sleep}
     end.
 
+handle_cast(reload_properties, S) ->
+    Props = lmq_lib:get_properties(S#state.name),
+    lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
+    State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
+
+handle_cast(Msg, State) ->
+    lager:warning("Unknown message received: ~p", [Msg]),
+    {noreply, State}.
+
+handle_info(timeout, S=#state{}) ->
+    NewState = maybe_push_message(S),
+    lager:debug("number of waitings in ~p: ~p", [S#state.name, queue:len(NewState#state.waiting)]),
+    {State, Sleep} = prepare_sleep(NewState),
+    {noreply, State, Sleep};
+
+handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
+
+handle_info(Msg, State) ->
+    lager:warning("Unknown message received: ~p", [Msg]),
+    {noreply, State}.
+
+code_change(_OldVsn, State, _Extra) ->
+    {ok, State}.
+
+terminate(_Reason, _State) ->
+    ok.
+
+%% ==================================================================
+%% Private functions
+%% ==================================================================
+
 handle_queue_call({push, Data}, _From, S=#state{}) ->
     Retry = proplists:get_value(retry, S#state.props),
     Opts = case proplists:get_value(pack, S#state.props) of
@@ -146,42 +182,6 @@ handle_queue_call({props, Props}, _From, S=#state{}) ->
 handle_queue_call(get_properties, _From, S) ->
     Props = S#state.props,
     {reply, Props, S}.
-
-handle_cast(reload_properties, S) ->
-    Props = lmq_lib:get_properties(S#state.name),
-    lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
-    State = S#state{props=Props},
-    {State1, Sleep} = prepare_sleep(State),
-    {noreply, State1, Sleep};
-
-handle_cast(Msg, State) ->
-    lager:warning("Unknown message received: ~p", [Msg]),
-    {noreply, State}.
-
-handle_info(timeout, S=#state{}) ->
-    NewState = maybe_push_message(S),
-    lager:debug("number of waitings in ~p: ~p", [S#state.name, queue:len(NewState#state.waiting)]),
-    {State, Sleep} = prepare_sleep(NewState),
-    {noreply, State, Sleep};
-
-handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
-    State = remove_waiting(Ref, S),
-    {State1, Sleep} = prepare_sleep(State),
-    {noreply, State1, Sleep};
-
-handle_info(Msg, State) ->
-    lager:warning("Unknown message received: ~p", [Msg]),
-    {noreply, State}.
-
-code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
-
-terminate(_Reason, _State) ->
-    ok.
-
-%% ==================================================================
-%% Private functions
-%% ==================================================================
 
 maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
     case queue:out(Waiting) of
