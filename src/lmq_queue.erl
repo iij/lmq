@@ -83,6 +83,7 @@ stop(Pid) ->
 %% ==================================================================
 
 init(Name) ->
+    lager:info("Starting the queue: ~s ~p", [Name, self()]),
     Props = lmq_lib:get_properties(Name),
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
@@ -131,6 +132,7 @@ handle_call({release, UUID}, _From, S=#state{}) ->
 handle_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
     Props1 = lmq_lib:get_properties(S#state.name),
+    lager:info("Update queue properties: ~s ~p", [S#state.name, Props1]),
     State = S#state{props=Props1},
     {State1, Sleep} = prepare_sleep(State),
     {reply, ok, State1, Sleep};
@@ -141,16 +143,18 @@ handle_call(get_properties, _From, S) ->
     {reply, Props, State, Sleep};
 
 handle_call(stop, _From, State) ->
+    lager:info("Stopping the queue: ~s ~p", [State#state.name, self()]),
     {stop, normal, ok, State}.
 
 handle_cast(reload_properties, S) ->
     Props = lmq_lib:get_properties(S#state.name),
+    lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
     State = S#state{props=Props},
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
 
 handle_cast(Msg, State) ->
-    io:format("Unknown message received: ~p~n", [Msg]),
+    lager:warning("Unknown message received: ~p", [Msg]),
     {noreply, State}.
 
 handle_info(timeout, S=#state{}) ->
@@ -165,7 +169,7 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
     {noreply, State1, Sleep};
 
 handle_info(Msg, State) ->
-    io:format("Unknown message received: ~p~n", [Msg]),
+    lager:warning("Unknown message received: ~p", [Msg]),
     {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->

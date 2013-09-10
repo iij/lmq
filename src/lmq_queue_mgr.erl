@@ -43,6 +43,7 @@ get_default_props() ->
 %% ==================================================================
 
 init([]) ->
+    lager:info("Starting the queue manager: ~p", [self()]),
     lists:foreach(fun(Name) ->
         lmq_queue:start(Name)
     end, lmq_lib:all_queue_names()),
@@ -68,6 +69,7 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                     Props = proplists:get_value(props, Opts, []),
                     Props1 = lmq_misc:extend(Props, Base),
                     ok = lmq_queue:props(Pid, Props1),
+                    lager:info("Queue properties are updated: ~s ~p", [Name, Props]),
                     {reply, Pid, S};
                 undefined ->
                     {reply, Pid, S}
@@ -77,7 +79,7 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                 true ->
                     Props = proplists:get_value(props, Opts, []),
                     {ok, Pid} = lmq_queue:start(Name, Props),
-                    lager:info("A queue named ~s is created", [Name]),
+                    lager:info("The new queue created: ~s ~p", [Name, Pid]),
                     {reply, Pid, update_qmap(Name, Pid, S)};
                 undefined ->
                     {reply, not_found, S}
@@ -118,7 +120,7 @@ handle_call({get_default_props}, _From, S=#state{}) ->
     {reply, PropsList, S};
 
 handle_call(Msg, _From, State) ->
-    io:format("Unknown message: ~p~n", [Msg]),
+    lager:warning("Unknown message: ~p", [Msg]),
     {noreply, State}.
 
 handle_cast({queue_started, Name, Pid}, S) when is_atom(Name) ->
@@ -133,7 +135,7 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
     end, QMap),
     {noreply, S#state{qmap=NewQMap}};
 handle_info(Msg, State) ->
-    io:format("Unknown message: ~p~n", [Msg]),
+    lager:warning("Unknown message: ~p", [Msg]),
     {noreply, State}.
 
 terminate(_Reason, _State) ->
