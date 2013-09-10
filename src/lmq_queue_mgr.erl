@@ -174,18 +174,14 @@ validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Re
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
-get_mp(Regexp) ->
-    {ok, MP} = re:compile(Regexp),
-    MP.
-
 validate_props_test() ->
     ?assertEqual(
-        {ok, [{get_mp("lmq/a"), [{pack, 0}, {retry, 1}, {timeout, 30}]},
-              {get_mp("lmq/.*"), [{pack, 0}, {retry, 2}, {timeout, 60}]}]},
+        {ok, [{element(2, re:compile("lmq/a")), [{pack, 0}, {retry, 1}, {timeout, 30}]},
+              {element(2, re:compile("lmq/.*")), [{pack, 0}, {retry, 2}, {timeout, 60}]}]},
         validate_props_list([{"lmq/a", [{retry, 1}]},
                              {"lmq/.*", [{timeout, 60}]}])),
     ?assertEqual(
-        {ok, [{get_mp(<<"lmq/.*">>), [{pack, 0}, {retry, 1}, {timeout, 30}]}]},
+        {ok, [{element(2, re:compile(<<"lmq/.*">>)), [{pack, 0}, {retry, 1}, {timeout, 30}]}]},
         validate_props_list([{<<"lmq/.*">>, [{retry, 1}]}])),
     ?assertEqual(
         {error, invalid_syntax},
