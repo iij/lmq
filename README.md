@@ -68,9 +68,9 @@ LMQ はメッセージを再送する際にメッセージ ID を変更します
 また、`release` を呼ぶ事でメッセージを意図的にキューに戻すことが可能です。結果として、メッセージは即座に再送されますが、この場合に限り再送カウンタは消費されません。クライアントがメッセージを処理できない状態になった時は、明示的に `release` を呼び出すことで、LMQ による再送を待たずに他のクライアントにメッセージを渡すことができます。
 
 ## パッキング
-LMQ には、一定時間内に特定のキューに `push` された全てのメッセージを取りまとめて、時間経過後に一つのメッセージとしてキューに入れるパッキング機能があります。再送処理等はパックされたメッセージ単位で行われます。
+LMQ には、一定時間内に特定のキューに `push` された全てのメッセージを取りまとめて、時間経過後に一つのメッセージとしてキューに入れるパッキング機能があります。このパッキングされたメッセージのことをパッケージと呼びます。一旦パッケージが作成されると、LMQ はこれをメッセージと同様に処理します。そのため、再送処理や API による操作はパッケージ単位で行われます。
 
-この機能を有効にするには、キューのプロパティの `pack` を 0 より大きくしてください。パッキングが有効なキューでは、`push` されたメッセージは `pack` 時間が経過するまで取り出せないことに注意してください。
+この機能を有効にするには、キューのプロパティの `pack` を 0 より大きくしてください。なお、パッキングが有効なキューでは、`push` されたメッセージは `pack` 時間が経過するまで取り出せないことに注意してください。
 
 ## パフォーマンスチューニング
 高いパフォーマンスが必要な環境では、API のアクセスログを無効化することで 15-30% ほど多くの API リクエストを処理できるようになります。
@@ -115,15 +115,18 @@ LMQ は MessagePack-RPC インタフェースを 18800 番ポートで提供し�
 <dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
 </dl>
 
-#### pull(name[, timeout]) -> {"queue": name, "id": id, "content": content} | "empty"
+#### pull(name[, timeout]) -> {"queue": name, "id": id, "type": type, "content": content} | "empty"
 指定したキューからメッセージを取り出します。キューがなければ作成します。
 
 timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
+
+`type` が "package" の場合、`content` は `push` されたデータの配列になります。
 
 <dl>
 <dt>name (string)</dt><dd>キューの名前</dd>
 <dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
 <dt>id (string)</dt><dd>メッセージの ID</dd>
+<dt>type (string)</dt><dd>メッセージのタイプ。normal: 通常、package: パッケージ</dd>
 <dt>content</dt><dd>push() により投入されたデータ</dd>
 </dl>
 
@@ -136,17 +139,20 @@ timeout を指定し、タイムアウトした時は `empty` 文字列が返り
 <dt>content (object)</dt><dd>投入するデータで、形式は問わない</dd>
 </dl>
 
-#### pull_any(regexp[, timeout]) -> {"queue": name, "id": id, "content": content} | "empty"
+#### pull_any(regexp[, timeout]) -> {"queue": name, "id": id, "type": type, "content": content} | "empty"
 
 正規表現にマッチするキューの中から、最も早く取り出せたメッセージを取得します。
 
 timeout を指定し、タイムアウトした時は `empty` 文字列が返ります。
+
+`type` が "package" の場合、`content` は `push` されたデータの配列になります。
 
 <dl>
 <dt>regexp (string)</dt><dd>正規表現</dd>
 <dt>timeout (float)<dt><dd>タイムアウトまでの秒数</dd>
 <dt>name (string)</dt><dd>キューの名前</dd>
 <dt>id (string)</dt><dd>メッセージの ID</dd>
+<dt>type (string)</dt><dd>メッセージのタイプ。normal: 通常、package: パッケージ</dd>
 <dt>content</dt><dd>push() により投入されたデータ</dd>
 </dl>
 
