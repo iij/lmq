@@ -34,7 +34,7 @@ pull(Config) ->
     timer:sleep(100),
     lmq:push(Name, <<"test_data">>),
     receive
-        {[{<<"id">>, _}, {<<"content">>, <<"test_data">>}]} -> ok
+        {[{<<"id">>, _}, {<<"type">>, <<"normal">>}, {<<"content">>, <<"test_data">>}]} -> ok
     after 100 ->
         ct:fail(no_response)
     end.
@@ -43,14 +43,14 @@ update_props(Config) ->
     Name = ?config(qname, Config),
     true = is_pid(lmq:update_props(Name, [{retry, 1}, {timeout, 0}])),
     ok = lmq:push(Name, 1),
-    {[{<<"id">>, _}, {<<"content">>, 1}]} = lmq:pull(Name),
-    {[{<<"id">>, _}, {<<"content">>, 1}]} = lmq:pull(Name),
+    {[{<<"id">>, _}, {<<"type">>, <<"normal">>}, {<<"content">>, 1}]} = lmq:pull(Name),
+    {[{<<"id">>, _}, {<<"type">>, <<"normal">>}, {<<"content">>, 1}]} = lmq:pull(Name),
     <<"empty">> = lmq:pull(Name, 0),
 
     %% change retry count
     true = is_pid(lmq:update_props(Name, [{retry, 0}])),
     ok = lmq:push(Name, 2),
-    {[{<<"id">>, _}, {<<"content">>, 2}]} = lmq:pull(Name),
+    {[{<<"id">>, _}, {<<"type">>, <<"normal">>}, {<<"content">>, 2}]} = lmq:pull(Name),
     <<"empty">> = lmq:pull(Name, 0).
 
 properties(_Config) ->

@@ -137,7 +137,8 @@ pack_message(Name, Data, Opts) ->
                 Retry = increment(proplists:get_value(retry, Opts, infinity)),
                 Duration = proplists:get_value(pack, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
-                {packing_started, #message{id=Id, data=[Data], retry=Retry, state=packing}}
+                {packing_started, #message{id=Id, state=packing, type=package,
+                                           retry=Retry, data=[Data]}}
         end,
         mnesia:write(Name, Msg, write),
         ok = qlc:delete_cursor(QC),
@@ -299,9 +300,9 @@ get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
     end.
 
 export_message(M=#message{}) ->
-    {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
-    {[{<<"id">>, UUID1}, {<<"content">>, M#message.data}]}.
+    UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
+    {[{<<"id">>, UUID}, {<<"type">>, atom_to_binary(M#message.type, latin1)},
+      {<<"content">>, M#message.data}]}.
 
 %% ==================================================================
 %% EUnit tests
@@ -321,8 +322,14 @@ get_props_test() ->
 export_message_test() ->
     Ref = make_ref(),
     M = #message{data=Ref},
-    {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
-    ?assertEqual({[{<<"id">>, UUID1}, {<<"content">>, Ref}]}, export_message(M)).
+    UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
+    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
+                   {<<"content">>, Ref}]},
+                 export_message(M)),
+
+    M2 = M#message{type=package},
+    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"package">>},
+                   {<<"content">>, Ref}]},
+                 export_message(M2)).
 
 -endif.
