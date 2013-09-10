@@ -39,13 +39,19 @@ end_per_testcase(_, Config) ->
 init(_Config) ->
     not_found = lmq_lib:queue_info(queue_test_1),
     {ok, Q1} = lmq_queue:start_link(queue_test_1),
-    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(queue_test_1),
+    [] = lmq_lib:queue_info(queue_test_1),
+    ?DEFAULT_QUEUE_PROPS = lmq_queue:get_properties(Q1),
     lmq_queue:stop(Q1),
+
+    P2 = lmq_misc:extend([{timeout, 10}], ?DEFAULT_QUEUE_PROPS),
     {ok, Q2} = lmq_queue:start_link(queue_test_1, [{timeout, 10}]),
-    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
+    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    P2 = lmq_queue:get_properties(Q2),
     lmq_queue:stop(Q2),
+
     {ok, Q3} = lmq_queue:start_link(queue_test_1),
-    10 = proplists:get_value(timeout, lmq_lib:queue_info(queue_test_1)),
+    [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
+    P2 = lmq_queue:get_properties(Q3),
     lmq_queue:stop(Q3).
 
 push_pull_done(Config) ->
@@ -57,7 +63,7 @@ push_pull_done(Config) ->
     true = is_float(TS),
     true = is_binary(UUID),
     uuid:uuid_to_string(UUID),
-    Ref = M#message.data,
+    Ref = M#message.content,
     ok = lmq_queue:done(Pid, UUID).
 
 release(Config) ->
@@ -65,13 +71,13 @@ release(Config) ->
     Ref = make_ref(),
     ok = lmq_queue:push(Pid, Ref),
     M1 = lmq_queue:pull(Pid),
-    Ref = M1#message.data,
+    Ref = M1#message.content,
     {_, UUID1} = M1#message.id,
     ok = lmq_queue:release(Pid, UUID1),
     not_found = lmq_queue:release(Pid, UUID1),
     not_found = lmq_queue:done(Pid, UUID1),
     M2 = lmq_queue:pull(Pid),
-    Ref = M2#message.data,
+    Ref = M2#message.content,
     {_, UUID2} = M2#message.id,
     true = UUID1 =/= UUID2,
     ok = lmq_queue:done(Pid, UUID2).
@@ -83,13 +89,13 @@ release_multi(Config) ->
     ok = lmq_queue:push(Pid, R),
     M1 = lmq_queue:pull(Pid),
     spawn(fun() -> Parent ! lmq_queue:pull(Pid) end),
-    R = M1#message.data,
+    R = M1#message.content,
     {_, UUID1} = M1#message.id,
     timer:sleep(10), %% waiting for starting process
     ok = lmq_queue:release(Pid, UUID1),
     receive
         M2 ->
-            R = M2#message.data,
+            R = M2#message.content,
             {_, UUID2} = M2#message.id,
             true = UUID1 =/= UUID2,
             ok = lmq_queue:done(Pid, UUID2)
@@ -104,8 +110,8 @@ multi_queue(Config) ->
     Ref2 = make_ref(),
     ok = lmq_queue:push(Q1, Ref1),
     ok = lmq_queue:push(Q2, Ref2),
-    M2 = lmq_queue:pull(Q2), Ref2 = M2#message.data,
-    M1 = lmq_queue:pull(Q1), Ref1 = M1#message.data,
+    M2 = lmq_queue:pull(Q2), Ref2 = M2#message.content,
+    M1 = lmq_queue:pull(Q1), Ref1 = M1#message.content,
     ok = lmq_queue:done(Q1, element(2, M1#message.id)),
     ok = lmq_queue:retain(Q2, element(2, M2#message.id)),
     ok = lmq_queue:release(Q2, element(2, M2#message.id)),
@@ -118,11 +124,11 @@ pull_timeout(_Config) ->
     Ref = make_ref(),
     empty = lmq_queue:pull(Q, 0),
     ok = lmq_queue:push(Q, Ref),
-    M1 = lmq_queue:pull(Q, 0), Ref = M1#message.data,
-    M2 = lmq_queue:pull(Q), Ref = M2#message.data,
+    M1 = lmq_queue:pull(Q, 0), Ref = M1#message.content,
+    M2 = lmq_queue:pull(Q), Ref = M2#message.content,
     true = M1 =/= M2,
     empty = lmq_queue:pull(Q, 0.2),
-    M3 = lmq_queue:pull(Q, 0.2), Ref = M3#message.data.
+    M3 = lmq_queue:pull(Q, 0.2), Ref = M3#message.content.
 
 async_request(_Config) ->
     {ok, Q} = lmq_queue:start_link(async_request, [{timeout, 0.4}]),
@@ -138,11 +144,11 @@ async_request(_Config) ->
     end),
     lists:foreach(fun(_) ->
         receive
-            {1, M1} -> ct:pal("~p", [M1]), R1 = M1#message.data;
+            {1, M1} -> ct:pal("~p", [M1]), R1 = M1#message.content;
             {2, M2} ->
                 ct:pal("~p", [M2]), {_, UUID2} = M2#message.id,
                 ok = lmq_queue:done(Q, UUID2);
-            {3, M3} -> ct:pal("~p", [M3]), R1 = M3#message.data
+            {3, M3} -> ct:pal("~p", [M3]), R1 = M3#message.content
         end
     end, lists:seq(1, 3)).
 
@@ -151,12 +157,12 @@ pull_async(_Config) ->
     R = make_ref(),
     lmq_queue:push(Q, R),
     Id1 = lmq_queue:pull_async(Q),
-    receive {Id1, M1} when R =:= M1#message.data -> ok
+    receive {Id1, M1} when R =:= M1#message.content -> ok
     after 100 -> ct:fail(no_response)
     end,
 
     Id2 = lmq_queue:pull_async(Q),
-    receive {Id2, M2} when R =:= M2#message.data -> ok
+    receive {Id2, M2} when R =:= M2#message.content -> ok
     after 150 -> ct:fail(no_response)
     end,
 

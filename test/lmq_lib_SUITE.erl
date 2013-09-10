@@ -4,12 +4,12 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1, packing/1]).
+-export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
+    limit_retry/1, error_case/1, packing/1, property/1]).
 
 all() ->
-    [create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case, packing].
+    [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
+     error_case, packing, property].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -33,14 +33,18 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
     ok = lmq_lib:delete(?config(qname, Config)).
 
+lmq_info(_Config) ->
+    ok = lmq_lib:set_lmq_info(name, lmq),
+    {ok, lmq} = lmq_lib:get_lmq_info(name),
+    {error, not_found} = lmq_lib:get_lmq_info(non_exists),
+    {ok, []} = lmq_lib:get_lmq_info(non_exists, []).
+
 create_delete(_Config) ->
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
-    ?DEFAULT_QUEUE_PROPS = lmq_lib:queue_info(test),
+    [] = lmq_lib:queue_info(test),
     ok = lmq_lib:create(test, [{timeout, 10}]),
-    Props = lmq_lib:queue_info(test),
-    10 = proplists:get_value(timeout, Props),
-    2 = proplists:get_value(retry, Props),
+    [{timeout, 10}] = lmq_lib:queue_info(test),
     ok = lmq_lib:delete(test),
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
     not_found = lmq_lib:queue_info(test),
@@ -65,11 +69,19 @@ done(Config) ->
 
 release(Config) ->
     Name = ?config(qname, Config),
-    ok = lmq_lib:enqueue(Name, make_ref()),
+    ok = lmq_lib:enqueue(Name, make_ref(), [{retry, 2}]),
     M = lmq_lib:dequeue(Name, 30),
+    2 = M#message.retry,
     {_, UUID} = M#message.id,
     ok = lmq_lib:release(Name, UUID),
-    not_found = lmq_lib:release(Name, UUID).
+    not_found = lmq_lib:release(Name, UUID),
+    2 = (lmq_lib:dequeue(Name, 30))#message.retry,
+
+    ok = lmq_lib:enqueue(Name, make_ref()),
+    M2 = lmq_lib:dequeue(Name, 30),
+    infinity = M2#message.retry,
+    ok = lmq_lib:release(Name, element(2, M2#message.id)),
+    infinity = (lmq_lib:dequeue(Name, 30))#message.retry.
 
 retain(Config) ->
     Name = ?config(qname, Config),
@@ -96,12 +108,12 @@ limit_retry(Config) ->
     Ref = make_ref(),
     %% retry 5 times, that means dequeue succeed 6 times
     ok = lmq_lib:enqueue(Name, Ref, [{retry, 5}]),
-    lists:all(fun(M) -> Ref =:= M#message.data end,
+    lists:all(fun(M) -> Ref =:= M#message.content end,
         [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 6)]),
     empty = lmq_lib:dequeue(Name, Timeout),
     %% retry infinity
     ok = lmq_lib:enqueue(Name, Ref),
-    lists:all(fun(M) -> Ref =:= M#message.data end,
+    lists:all(fun(M) -> Ref =:= M#message.content end,
         [lmq_lib:dequeue(Name, Timeout) || _ <- lists:seq(1, 10)]).
 
 error_case(_Config) ->
@@ -117,14 +129,47 @@ packing(Config) ->
     Name = ?config(qname, Config),
     Timeout = 30,
     R1 = make_ref(), R2 = make_ref(), R3 = make_ref(),
-    lmq_lib:enqueue(Name, R1, [{pack, 0}]),
-    lmq_lib:enqueue(Name, R2, [{pack, 0}]),
-    [R1] = (lmq_lib:dequeue(Name, Timeout))#message.data,
-    [R2] = (lmq_lib:dequeue(Name, Timeout))#message.data,
-    lmq_lib:enqueue(Name, R1, [{pack, 100}]),
-    lmq_lib:enqueue(Name, R2, [{pack, 100}]),
-    lmq_lib:enqueue(Name, R3),
-    R3 = (lmq_lib:dequeue(Name, Timeout))#message.data,
+    %% 0 means not packing
+    ok = lmq_lib:enqueue(Name, R1, [{pack, 0}]),
+    R1 = (lmq_lib:dequeue(Name, Timeout))#message.content,
+
+    %% get 2 packages, each package contains 1 message
+    packing_started = lmq_lib:enqueue(Name, R1, [{pack, 1}]), timer:sleep(1),
+    packing_started = lmq_lib:enqueue(Name, R2, [{pack, 1}]), timer:sleep(1),
+    [R1] = (lmq_lib:dequeue(Name, Timeout))#message.content,
+    [R2] = (lmq_lib:dequeue(Name, Timeout))#message.content,
+
+    %% packing and no packing message
+    packing_started = lmq_lib:enqueue(Name, R1, [{pack, 100}]),
+    packed = lmq_lib:enqueue(Name, R2, [{pack, 100}]),
+    ok = lmq_lib:enqueue(Name, R3),
+    R3 = (lmq_lib:dequeue(Name, Timeout))#message.content,
     empty = lmq_lib:dequeue(Name, Timeout),
     timer:sleep(100),
-    [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.data.
+    [R1, R2] = (lmq_lib:dequeue(Name, Timeout))#message.content.
+
+property(_Config) ->
+    N1 = property_default,
+    N2 = property_override1,
+    N3 = property_override2,
+    P1 = ?DEFAULT_QUEUE_PROPS,
+    P2 = lmq_misc:extend([{retry, infinity}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+    P3 = lmq_misc:extend([{retry, 0}, {timeout, 0}], ?DEFAULT_QUEUE_PROPS),
+
+    lmq_lib:create(N1),
+    lmq_lib:create(N2),
+    lmq_lib:create(N3, [{retry, 0}]),
+    lmq_lib:set_lmq_info(default_props,
+        [{"override", [{retry, infinity}, {timeout, 0}]}]),
+
+    P1 = lmq_lib:get_properties(N1),
+    P2 = lmq_lib:get_properties(N2),
+    P3 = lmq_lib:get_properties(N3),
+    P3 = lmq_lib:get_properties(N2, [{retry, 0}]),
+
+    P4 = lmq_misc:extend([{pack, 1}], ?DEFAULT_QUEUE_PROPS),
+    P5 = lmq_misc:extend([{pack, 1}, {retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    lmq_lib:set_lmq_info(default_props, [{"override", [{pack, 1}]}]),
+    P1 = lmq_lib:get_properties(N1),
+    P4 = lmq_lib:get_properties(N2),
+    P5 = lmq_lib:get_properties(N3).

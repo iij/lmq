@@ -3,9 +3,11 @@
 -include("lmq.hrl").
 -include_lib("stdlib/include/qlc.hrl").
 -export([init_mnesia/0, create_admin_table/0,
-    queue_info/1, all_queue_names/0, create/1,
+    get_lmq_info/1, get_lmq_info/2, set_lmq_info/2,
+    queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, rfind/2, waittime/1, export_message/1]).
+    release/2, first/1, rfind/2, waittime/1, export_message/1,
+    get_properties/1, get_properties/2]).
 
 init_mnesia() ->
     application:stop(mnesia),
@@ -22,12 +24,38 @@ init_mnesia() ->
     end.
 
 create_admin_table() ->
+    case mnesia:create_table(?LMQ_INFO_TABLE, ?LMQ_INFO_TABLE_DEFS) of
+        {atomic, ok} -> ok;
+        {aborted, {already_exists, ?LMQ_INFO_TABLE}} -> ok;
+        Other1 ->
+            lager:error("Failed to create admin table: ~p", [Other1])
+    end,
     case mnesia:create_table(?QUEUE_INFO_TABLE, ?QUEUE_INFO_TABLE_DEFS) of
         {atomic, ok} -> ok;
         {aborted, {already_exists, ?QUEUE_INFO_TABLE}} -> ok;
-        Other ->
-            lager:error("Failed to create admin table: ~p", [Other])
+        Other2 ->
+            lager:error("Failed to create admin table: ~p", [Other2])
     end.
+
+get_lmq_info(Key) ->
+    transaction(fun() ->
+        case mnesia:read(?LMQ_INFO_TABLE, Key) of
+            [Info] -> {ok, Info#lmq_info.value};
+            _ -> {error, not_found}
+        end
+    end).
+
+get_lmq_info(Key, Default) ->
+    case get_lmq_info(Key) of
+        {ok, _}=R -> R;
+        {error, _} -> {ok, Default}
+    end.
+
+set_lmq_info(Key, Value) ->
+    Info = #lmq_info{key=Key, value=Value},
+    transaction(fun() ->
+        ok = mnesia:write(?LMQ_INFO_TABLE, Info, write)
+    end).
 
 queue_info(Name) when is_atom(Name) ->
     F = fun() ->
@@ -40,6 +68,12 @@ queue_info(Name) when is_atom(Name) ->
     end,
     transaction(F).
 
+update_queue_props(Name, Props) when is_atom(Name) ->
+    Info = #queue_info{name=Name, props=Props},
+    transaction(fun() ->
+        mnesia:write(?QUEUE_INFO_TABLE, Info, write)
+    end).
+
 all_queue_names() ->
     transaction(fun() ->
         qlc:e(qlc:q([N || #queue_info{name=N}
@@ -50,13 +84,12 @@ create(Name) when is_atom(Name) ->
     create(Name, []).
 
 create(Name, Props) when is_atom(Name) ->
-    Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
         {record_name, message}
     ],
-    Info = #queue_info{name=Name, props=Props1},
+    Info = #queue_info{name=Name, props=Props},
     F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
 
     case mnesia:create_table(Name, Def) of
@@ -78,36 +111,38 @@ delete(Name) when is_atom(Name) ->
             lager:error("Failed to delete table '~p': ~p", [Name, Other])
     end.
 
-enqueue(Name, Data) ->
-    enqueue(Name, Data, []).
+enqueue(Name, Content) ->
+    enqueue(Name, Content, []).
 
-enqueue(Name, Data, Opts) ->
-    case proplists:get_value(pack, Opts) of
-        undefined ->
-            Retry = proplists:get_value(retry, Opts, infinity),
-            Msg = #message{data=Data, retry=Retry},
+enqueue(Name, Content, Opts) ->
+    case proplists:get_value(pack, Opts, 0) == 0 of
+        true ->
+            Retry = increment(proplists:get_value(retry, Opts, infinity)),
+            Msg = #message{content=Content, retry=Retry},
             transaction(fun() -> mnesia:write(Name, Msg, write) end);
-        T when is_integer(T) -> %% Packed duration in milliseconds
-            pack_message(Name, Data, Opts)
+        false -> %% Packed duration in milliseconds
+            pack_message(Name, Content, Opts)
     end.
 
-pack_message(Name, Data, Opts) ->
+pack_message(Name, Content, Opts) ->
     transaction(fun() ->
         QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=packing}
                                     <- mnesia:table(Name),
                                     TS >= lmq_misc:unixtime()])),
-        Msg = case qlc:next_answers(QC, 1) of
+        {Ret, Msg} = case qlc:next_answers(QC, 1) of
             [M] -> %% packing process already started
-                Data1 = M#message.data ++ [Data],
-                M#message{data=Data1};
+                Content1 = M#message.content ++ [Content],
+                {packed, M#message{content=Content1}};
             [] -> %% add new message for packing
-                Retry = proplists:get_value(retry, Opts, infinity),
+                Retry = increment(proplists:get_value(retry, Opts, infinity)),
                 Duration = proplists:get_value(pack, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
-                #message{id=Id, data=[Data], retry=Retry, state=packing}
+                {packing_started, #message{id=Id, state=packing, type=package,
+                                           retry=Retry, content=[Content]}}
         end,
         mnesia:write(Name, Msg, write),
-        ok = qlc:delete_cursor(QC)
+        ok = qlc:delete_cursor(QC),
+        Ret
     end).
 
 dequeue(Name, Timeout) ->
@@ -132,15 +167,21 @@ get_first_message(Name, Timeout) ->
                             NewMsg = M#message{id=NewId, state=processing},
                             mnesia:write(Name, NewMsg, write),
                             NewMsg;
-                        N when N < 0 ->
-                            get_first_message(Name, Timeout);
-                        N ->
+                        N when N > 0 ->
                             NewMsg = M#message{id=NewId, state=processing, retry=N-1},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg
+                            NewMsg;
+                        _ ->
+                            get_first_message(Name, Timeout)
                     end
             end
     end.
+
+increment(infinity) ->
+    infinity;
+
+increment(Number) when is_integer(Number) ->
+    Number + 1.
 
 done(Name, UUID) ->
     Now = lmq_misc:unixtime(),
@@ -166,8 +207,8 @@ release(Name, UUID) ->
                 not_found;
             #message{id={TS, UUID}} when TS < Now ->
                 not_found;
-            #message{state=processing}=M ->
-                M1 = M#message{id={Now, UUID}, state=available},
+            #message{state=processing, retry=R}=M ->
+                M1 = M#message{id={Now, UUID}, state=available, retry=increment(R)},
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
             _ ->
@@ -230,20 +271,65 @@ transaction(F) ->
         {aborted, Reason} -> {error, Reason}
     end.
 
-export_message(M=#message{}) ->
-    {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
-    {[{<<"id">>, UUID1}, {<<"content">>, M#message.data}]}.
+get_properties(Name) ->
+    Base = get_props(Name),
+    case lmq_lib:queue_info(Name) of
+        not_found -> Base;
+        Props -> lmq_misc:extend(Props, Base)
+    end.
 
+get_properties(Name, Override) ->
+    Props = get_properties(Name),
+    lmq_misc:extend(Override, Props).
+
+get_props(Name) ->
+    {ok, DefaultProps} = get_lmq_info(default_props, []),
+    get_props(Name, DefaultProps).
+
+get_props(_Name, []) ->
+    ?DEFAULT_QUEUE_PROPS;
+
+get_props(Name, PropsList) when is_atom(Name) ->
+    get_props(atom_to_list(Name), PropsList);
+
+get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
+    {ok, MP} = re:compile(Regexp),
+    case re:run(Name, MP) of
+        {match, _} -> lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS);
+        _ -> get_props(Name, T)
+    end.
+
+export_message(M=#message{}) ->
+    UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
+    {[{<<"id">>, UUID}, {<<"type">>, atom_to_binary(M#message.type, latin1)},
+      {<<"content">>, M#message.content}]}.
+
+%% ==================================================================
+%% EUnit tests
+%% ==================================================================
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
+get_props_test() ->
+    DefaultProps = [{"lmq", [{retry, 0}]}],
+    Props = lmq_misc:extend([{retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    ?assertEqual(Props, get_props(lmq, DefaultProps)),
+    ?assertEqual(Props, get_props("lmq", DefaultProps)),
+    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("foo", DefaultProps)),
+    ?assertEqual(?DEFAULT_QUEUE_PROPS, get_props("lmq", [])).
+
 export_message_test() ->
     Ref = make_ref(),
-    M = #message{data=Ref},
-    {_, UUID} = M#message.id,
-    UUID1 = list_to_binary(uuid:uuid_to_string(UUID)),
-    ?assertEqual({[{<<"id">>, UUID1}, {<<"content">>, Ref}]}, export_message(M)).
+    M = #message{content=Ref},
+    UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
+    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
+                   {<<"content">>, Ref}]},
+                 export_message(M)),
+
+    M2 = M#message{type=package},
+    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"package">>},
+                   {<<"content">>, Ref}]},
+                 export_message(M2)).
 
 -endif.

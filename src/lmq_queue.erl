@@ -1,8 +1,9 @@
 -module(lmq_queue).
 -behaviour(gen_server).
--export([start/1, start_link/1, start_link/2, stop/1,
+-export([start/1, start/2, start_link/1, start_link/2, stop/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2]).
+    done/2, retain/2, release/2, props/2, get_properties/1,
+    reload_properties/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -13,20 +14,22 @@
 start(Name) ->
     supervisor:start_child(lmq_queue_sup, [Name]).
 
+start(Name, Props) ->
+    supervisor:start_child(lmq_queue_sup, [Name, Props]).
+
 start_link(Name) when is_atom(Name) ->
     case lmq_lib:queue_info(Name) of
-        not_found ->
-            start_link(Name, ?DEFAULT_QUEUE_PROPS);
-        _ ->
-            gen_server:start_link(?MODULE, Name, [])
-    end.
+        not_found -> ok = lmq_lib:create(Name);
+        _ -> ok
+    end,
+    gen_server:start_link(?MODULE, Name, []).
 
 start_link(Name, Props) when is_atom(Name) ->
     ok = lmq_lib:create(Name, Props),
     gen_server:start_link(?MODULE, Name, []).
 
-push(Pid, Data) ->
-    gen_server:call(Pid, {push, Data}).
+push(Pid, Content) ->
+    gen_server:call(Pid, {push, Content}).
 
 pull(Pid) ->
     gen_server:call(Pid, {pull, infinity}, infinity).
@@ -63,65 +66,56 @@ retain(Pid, UUID) ->
 release(Pid, UUID) ->
     gen_server:call(Pid, {release, UUID}).
 
+props(Pid, Props) ->
+    gen_server:call(Pid, {props, Props}).
+
+get_properties(Pid) ->
+    gen_server:call(Pid, get_properties).
+
+reload_properties(Pid) ->
+    gen_server:cast(Pid, reload_properties).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
+%% ==================================================================
+%% gen_server callbacks
+%% ==================================================================
+
 init(Name) ->
-    Props = lmq_lib:queue_info(Name),
+    lager:info("Starting the queue: ~s ~p", [Name, self()]),
+    Props = lmq_lib:get_properties(Name),
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
-handle_call({push, Data}, _From, S=#state{}) ->
-    Retry = proplists:get_value(retry, S#state.props),
-    Opts = case proplists:get_value(pack, S#state.props) of
-        T when is_integer(T) -> [{retry, Retry}, {pack, T}];
-        _ -> [{retry, Retry}]
-    end,
-    R = lmq_lib:enqueue(S#state.name, Data, Opts),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
+handle_call(stop, _From, State) ->
+    lager:info("Stopping the queue: ~s ~p", [State#state.name, self()]),
+    {stop, normal, ok, State};
 
-handle_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
-    State = add_waiting(From, Pid, Timeout, S),
+handle_call(Msg, From, State) ->
+    case handle_queue_call(Msg, From, State) of
+        {reply, Reply, State1} ->
+            {State2, Sleep} = prepare_sleep(State1),
+            {reply, Reply, State2, Sleep};
+        {noreply, State1} ->
+            {State2, Sleep} = prepare_sleep(State1),
+            {noreply, State2, Sleep}
+    end.
+
+handle_cast(reload_properties, S) ->
+    Props = lmq_lib:get_properties(S#state.name),
+    lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
+    State = S#state{props=Props},
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
 
-handle_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
-    State = add_waiting(Pid, Timeout, S),
-    Ref = (queue:get_r(State#state.waiting))#waiting.ref,
-    {State1, Sleep} = prepare_sleep(State),
-    {reply, Ref, State1, Sleep};
-
-handle_call({pull_cancel, Ref}, _From, S=#state{}) ->
-    State = remove_waiting(Ref, S),
-    {State1, Sleep} = prepare_sleep(State),
-    {reply, ok, State1, Sleep};
-
-handle_call({done, UUID}, _From, S=#state{}) ->
-    R = lmq_lib:done(S#state.name, UUID),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
-
-handle_call({retain, UUID}, _From, S=#state{props=Props}) ->
-    R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
-
-handle_call({release, UUID}, _From, S=#state{}) ->
-    R = lmq_lib:release(S#state.name, UUID),
-    {State, Sleep} = prepare_sleep(S),
-    {reply, R, State, Sleep};
-
-handle_call(stop, _From, State) ->
-    {stop, normal, ok, State}.
-
 handle_cast(Msg, State) ->
-    io:format("Unknown message received: ~p~n", [Msg]),
+    lager:warning("Unknown message received: ~p", [Msg]),
     {noreply, State}.
 
 handle_info(timeout, S=#state{}) ->
     NewState = maybe_push_message(S),
-    lager:debug("number of waitings: ~p", [queue:len(NewState#state.waiting)]),
+    lager:debug("number of waitings in ~p: ~p", [S#state.name, queue:len(NewState#state.waiting)]),
     {State, Sleep} = prepare_sleep(NewState),
     {noreply, State, Sleep};
 
@@ -131,7 +125,7 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{}) ->
     {noreply, State1, Sleep};
 
 handle_info(Msg, State) ->
-    io:format("Unknown message received: ~p~n", [Msg]),
+    lager:warning("Unknown message received: ~p", [Msg]),
     {noreply, State}.
 
 code_change(_OldVsn, State, _Extra) ->
@@ -139,6 +133,55 @@ code_change(_OldVsn, State, _Extra) ->
 
 terminate(_Reason, _State) ->
     ok.
+
+%% ==================================================================
+%% Private functions
+%% ==================================================================
+
+handle_queue_call({push, Content}, _From, S=#state{}) ->
+    Retry = proplists:get_value(retry, S#state.props),
+    Opts = case proplists:get_value(pack, S#state.props) of
+        T when is_integer(T) -> [{retry, Retry}, {pack, T}];
+        _ -> [{retry, Retry}]
+    end,
+    R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    {reply, R, S};
+
+handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
+    State = add_waiting(From, Pid, Timeout, S),
+    {noreply, State};
+
+handle_queue_call({pull_async, Timeout}, {Pid, _}, S=#state{}) ->
+    State = add_waiting(Pid, Timeout, S),
+    Ref = (queue:get_r(State#state.waiting))#waiting.ref,
+    {reply, Ref, State};
+
+handle_queue_call({pull_cancel, Ref}, _From, S=#state{}) ->
+    State = remove_waiting(Ref, S),
+    {reply, ok, State};
+
+handle_queue_call({done, UUID}, _From, S=#state{}) ->
+    R = lmq_lib:done(S#state.name, UUID),
+    {reply, R, S};
+
+handle_queue_call({retain, UUID}, _From, S=#state{props=Props}) ->
+    R = lmq_lib:retain(S#state.name, UUID, proplists:get_value(timeout, Props)),
+    {reply, R, S};
+
+handle_queue_call({release, UUID}, _From, S=#state{}) ->
+    R = lmq_lib:release(S#state.name, UUID),
+    {reply, R, S};
+
+handle_queue_call({props, Props}, _From, S=#state{}) ->
+    lmq_lib:update_queue_props(S#state.name, Props),
+    Props1 = lmq_lib:get_properties(S#state.name),
+    lager:info("Update queue properties: ~s ~p", [S#state.name, Props1]),
+    State = S#state{props=Props1},
+    {reply, ok, State};
+
+handle_queue_call(get_properties, _From, S) ->
+    Props = S#state.props,
+    {reply, Props, S}.
 
 maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
     case queue:out(Waiting) of
@@ -202,7 +245,7 @@ prepare_sleep(S=#state{}) ->
                 0 -> {S, 0};
                 T ->
                     %% remove invalid waitings before sleeping
-                    F = fun(W=#waiting{}) ->
+                    Waitings = queue:filter(fun(W=#waiting{}) ->
                         case wait_valid(W) of
                             true -> true;
                             false ->
@@ -212,7 +255,10 @@ prepare_sleep(S=#state{}) ->
                                 end,
                                 false
                         end
-                    end,
-                    {S#state{waiting=queue:filter(F, S#state.waiting)}, T}
+                    end, S#state.waiting),
+                    case queue:is_empty(Waitings) of
+                        true -> {S#state{waiting=Waitings}, infinity};
+                        false -> {S#state{waiting=Waitings}, T}
+                    end
             end
     end.
