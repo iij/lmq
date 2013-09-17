@@ -9,8 +9,11 @@ join([NodeStr]) when is_list(NodeStr) ->
 join(Node) when is_atom(Node) ->
     case net_adm:ping(Node) of
         pong ->
+            ok = application:stop(lmq),
             delete_local_schema(),
-            rpc:call(Node, lmq_console, add_new_node, [node()]);
+            R = rpc:call(Node, lmq_console, add_new_node, [node()]),
+            ok = application:start(lmq),
+            R;
         pang ->
             {error, not_reachable}
     end.

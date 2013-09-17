@@ -10,6 +10,12 @@
     get_properties/1, get_properties/2]).
 
 init_mnesia() ->
+    case mnesia:system_info(db_nodes) =:= [node()] of
+        true -> create_schema();
+        false -> ok
+    end.
+
+create_schema() ->
     application:stop(mnesia),
     case mnesia:create_schema([node()]) of
         ok ->
