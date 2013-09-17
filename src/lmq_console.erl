@@ -1,6 +1,6 @@
 -module(lmq_console).
 
--export([join/1, add_new_node/1]).
+-export([join/1, leave/1, add_new_node/1]).
 
 join([NodeStr]) when is_list(NodeStr) ->
     Node = list_to_atom(NodeStr),
@@ -14,6 +14,14 @@ join(Node) when is_atom(Node) ->
         pang ->
             {error, not_reachable}
     end.
+
+leave([]) ->
+    RunningNodes = [Node || Node <- mnesia:system_info(running_db_nodes),
+                             Node =/= node()],
+    ok = application:stop(mnesia),
+    R = leave_cluster(RunningNodes),
+    ok = application:start(mnesia),
+    R.
 
 delete_local_schema() ->
     ok = application:stop(mnesia),
@@ -38,4 +46,15 @@ copy_all_tables(Node) ->
     case Errors of
         [] -> ok;
         Other -> {error, {copy_failed, Other}}
+    end.
+
+leave_cluster([Node | Rest]) when is_atom(Node) ->
+    case rpc:call(Node, mnesia, del_table_copy, [schema, node()]) of
+        {atomic, ok} ->
+            ok;
+        {aborted, Reason} ->
+            case Rest of
+                [] -> {error, Reason};
+                _ -> leave_cluster(Rest)
+            end
     end.
