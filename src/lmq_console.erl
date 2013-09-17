@@ -18,9 +18,14 @@ join(Node) when is_atom(Node) ->
 leave([]) ->
     RunningNodes = [Node || Node <- mnesia:system_info(running_db_nodes),
                              Node =/= node()],
+    ok = application:stop(lmq),
     ok = application:stop(mnesia),
-    R = leave_cluster(RunningNodes),
+    R = case leave_cluster(RunningNodes) of
+        ok -> ok = mnesia:delete_schema([node()]);
+        Other -> Other
+    end,
     ok = application:start(mnesia),
+    ok = application:start(lmq),
     R.
 
 delete_local_schema() ->
