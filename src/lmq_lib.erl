@@ -11,22 +11,8 @@
 
 init_mnesia() ->
     case mnesia:system_info(db_nodes) =:= [node()] of
-        true -> create_schema();
+        true -> create_admin_table();
         false -> ok
-    end.
-
-create_schema() ->
-    application:stop(mnesia),
-    case mnesia:create_schema([node()]) of
-        ok ->
-            lager:info("schema directory created."),
-            ok = application:start(mnesia),
-            lager:info("admin table created."),
-            ok = lmq_lib:create_admin_table();
-        {error, {_, {already_exists, _}}} ->
-            ok = application:start(mnesia);
-        Other ->
-            Other
     end.
 
 create_admin_table() ->
