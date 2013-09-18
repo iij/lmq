@@ -7,14 +7,14 @@ join([NodeStr]) when is_list(NodeStr) ->
     join(Node);
 
 join(Node) when is_atom(Node) ->
-    case net_adm:ping(Node) of
-        pong ->
+    case {net_kernel:connect_node(Node), net_adm:ping(Node)} of
+        {true, pong} ->
             ok = application:stop(lmq),
             delete_local_schema(),
             R = rpc:call(Node, lmq_console, add_new_node, [node()]),
             ok = application:start(lmq),
             R;
-        pang ->
+        {_, pang} ->
             {error, not_reachable}
     end.
 
