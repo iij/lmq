@@ -10,6 +10,12 @@
     get_properties/1, get_properties/2]).
 
 init_mnesia() ->
+    case mnesia:system_info(db_nodes) =:= [node()] of
+        true -> create_schema();
+        false -> ok
+    end.
+
+create_schema() ->
     application:stop(mnesia),
     case mnesia:create_schema([node()]) of
         ok ->
@@ -87,7 +93,8 @@ create(Name, Props) when is_atom(Name) ->
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
-        {record_name, message}
+        {record_name, message},
+        {ram_copies, mnesia:system_info(db_nodes)}
     ],
     Info = #queue_info{name=Name, props=Props},
     F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
