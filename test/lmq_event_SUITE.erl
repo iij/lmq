@@ -25,7 +25,7 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(_, Config) ->
-    gen_event:add_handler(?LMQ_EVENT, lmq_test_handler, self()),
+    lmq_event:add_handler(lmq_test_handler, self()),
     [{qname, lmq_event_test} | Config].
 
 end_per_testcase(_, Config) ->
