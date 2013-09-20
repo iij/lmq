@@ -1,6 +1,6 @@
 -module(lmq_queue).
 -behaviour(gen_server).
--export([start/1, start/2, start_link/1, start_link/2, stop/1,
+-export([start/1, start/2, start_link/1, start_link/2, stop/1, notify/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
     done/2, retain/2, release/2, props/2, get_properties/1,
     reload_properties/1]).
@@ -75,6 +75,9 @@ get_properties(Pid) ->
 reload_properties(Pid) ->
     gen_server:cast(Pid, reload_properties).
 
+notify(Pid) ->
+    gen_server:cast(Pid, notify).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
@@ -106,6 +109,10 @@ handle_cast(reload_properties, S) ->
     Props = lmq_lib:get_properties(S#state.name),
     lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
     State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
+
+handle_cast(notify, State) ->
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
 
@@ -145,6 +152,7 @@ handle_queue_call({push, Content}, _From, S=#state{}) ->
         _ -> [{retry, Retry}]
     end,
     R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    lmq_event:new_message(S#state.name),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->

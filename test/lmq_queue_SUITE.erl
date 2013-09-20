@@ -27,6 +27,7 @@ end_per_suite(_Config) ->
 init_per_testcase(init, Config) ->
     Config;
 init_per_testcase(_, Config) ->
+    {ok, _} = lmq_event:start_link(),
     {ok, Pid} = lmq_queue:start_link(message),
     [{queue, Pid} | Config].
 
