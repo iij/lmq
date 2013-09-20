@@ -9,7 +9,9 @@
 %% ==================================================================
 
 start_link() ->
-    start_link(mnesia:system_info(extra_db_nodes)).
+    Nodes = [N || N <- mnesia:system_info(running_db_nodes),
+                  N =/= node()],
+    start_link(Nodes).
 
 start_link(Nodes) ->
     {ok, Pid} = gen_event:start_link({local, ?MODULE}),
