@@ -12,11 +12,16 @@
 init([]) ->
     {ok, []}.
 
-handle_event({_, {new_message, QName}}, State) ->
-    io:format("new message arrived: ~p~n", [QName]),
+handle_event({remote, {new_message, QName}}, State) ->
+    lager:debug("new message arrived at remote queue ~s", [QName]),
+    case lmq_queue_mgr:get(QName) of
+        not_found -> ok;
+        Pid -> lmq_queue:notify(Pid)
+    end,
     {ok, State};
 
-handle_event(_, State) ->
+handle_event(Event, State) ->
+    lager:warning("Unknown event received: ~p", [Event]),
     {ok, State}.
 
 handle_call(_, State) ->
