@@ -6,12 +6,12 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([handle_new_message/1]).
+-export([emit_new_message/1, handle_new_message/1]).
 
 -define(LMQ_EVENT, lmq_event).
 
 all() ->
-    [handle_new_message].
+    [emit_new_message, handle_new_message].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -25,11 +25,20 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(_, Config) ->
+    gen_event:add_handler(?LMQ_EVENT, lmq_test_handler, self()),
     [{qname, lmq_event_test} | Config].
 
 end_per_testcase(_, Config) ->
     Name = ?config(qname, Config),
     lmq_queue_mgr:delete(Name).
+
+emit_new_message(Config) ->
+    Name = ?config(qname, Config),
+    Q = lmq_queue_mgr:get(Name, [create]),
+    lmq_queue:push(Q, 1),
+    receive {test_handler, {local, {new_message, Name}}} -> ok
+    after 50 -> ct:fail(no_response)
+    end.
 
 handle_new_message(Config) ->
     Name = ?config(qname, Config),
