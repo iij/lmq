@@ -24,5 +24,6 @@ start_link() ->
 %% ===================================================================
 
 init([]) ->
-    {ok, {{one_for_one, 5, 10},
-          [?CHILD(lmq_queue_supersup, supervisor)]}}.
+    {ok, {{one_for_all, 5, 10},
+          [?CHILD(lmq_queue_supersup, supervisor),
+           ?CHILD(lmq_event, worker)]}}.
