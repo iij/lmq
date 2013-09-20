@@ -8,6 +8,5 @@ RUN apt-get install -y git
 RUN curl -s -O http://erlang.org/download/otp_src_R16B01.tar.gz
 RUN tar xzf otp_src_R16B01.tar.gz
 RUN cd otp_src_R16B01 && ./configure && make && make install
-ADD . /docker
-WORKDIR /docker
+WORKDIR /gihuci
 CMD make test
