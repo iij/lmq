@@ -145,6 +145,7 @@ handle_queue_call({push, Content}, _From, S=#state{}) ->
         _ -> [{retry, Retry}]
     end,
     R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    lmq_event:new_message(S#state.name),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->

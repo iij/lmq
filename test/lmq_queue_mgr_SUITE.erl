@@ -25,6 +25,7 @@ end_per_suite(_Config) ->
 init_per_testcase(auto_load, Config) ->
     Config;
 init_per_testcase(_, Config) ->
+    {ok, _} = lmq_event:start_link(),
     {ok, _} = lmq_queue_supersup:start_link(),
     Config.
 
