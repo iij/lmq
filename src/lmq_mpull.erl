@@ -51,15 +51,15 @@ idle({pull, Regexp, Timeout}, From, #state{}=S) ->
                 Id = lmq_queue:pull_async(Pid, Timeout),
                 dict:store(Id, Q, Acc)
             end, dict:new(), Queues),
+            gen_fsm:send_event_after(Timeout, cancel),
             State = S#state{from=From, regexp=Regexp, timeout=Timeout,
-                            mapping=Mapping,
-                            end_time=lmq_misc:unixtime()+Timeout/1000},
-            {next_state, waiting, State, get_timeout(State)}
+                            mapping=Mapping},
+            {next_state, waiting, State}
     end;
 
 idle(Event, _From, State) ->
     ?UNEXPECTED(Event, idle),
-    {reply, error, idle, State, get_timeout(State)}.
+    {reply, error, idle, State}.
 
 waiting({maybe_pull, QName}, #state{}=S) ->
     case re:compile(S#state.regexp) of
@@ -69,13 +69,16 @@ waiting({maybe_pull, QName}, #state{}=S) ->
                     Pid = lmq_queue_mgr:get(QName),
                     Id = lmq_queue:pull_async(Pid, S#state.timeout),
                     Mapping = dict:store(Id, {QName, Pid}, S#state.mapping),
-                    {next_state, waiting, S#state{mapping=Mapping}, get_timeout(S)};
+                    {next_state, waiting, S#state{mapping=Mapping}};
                 _ ->
-                    {next_state, waiting, S, get_timeout(S)}
+                    {next_state, waiting, S}
             end;
         {error, _} ->
-            {next_state, waiting, S, get_timeout(S)}
+            {next_state, waiting, S}
     end;
+
+waiting(cancel, #state{timeout=T}=S) when T > 0 ->
+    waiting(timeout, S);
 
 waiting(timeout, #state{}=S) ->
     cancel_pull(S#state.mapping),
@@ -84,14 +87,14 @@ waiting(timeout, #state{}=S) ->
 
 waiting(Event, State) ->
     ?UNEXPECTED(Event, waiting),
-    {reply, error, waiting, State, get_timeout(State)}.
+    {reply, error, waiting, State}.
 
 finalize(timeout, State) ->
     {stop, normal, State};
 
 finalize(Event, State) ->
     ?UNEXPECTED(Event, finalize),
-    {reply, error, finalize, State, get_timeout(State)}.
+    {reply, error, finalize, State}.
 
 handle_info({Id, #message{}=M}, waiting, #state{mapping=Mapping}=S) ->
     {Name, _} = dict:fetch(Id, Mapping),
@@ -150,9 +153,3 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 cancel_pull(Mapping) ->
     %% after calling this function, queues never sent a new message.
     dict:map(fun(Id, {_, Pid}) -> lmq_queue:pull_cancel(Pid, Id) end, Mapping).
-
-get_timeout(#state{timeout=Timeout, end_time=EndTime}) ->
-    case Timeout of
-        0 -> infinity;
-        _ -> round((EndTime - lmq_misc:unixtime()) * 1000)
-    end.
