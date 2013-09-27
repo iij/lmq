@@ -2,13 +2,12 @@
 
 -include_lib("common_test/include/ct.hrl").
 -include("lmq.hrl").
+-include("lmq_test.hrl").
 
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([emit_new_message/1, handle_new_message/1]).
-
--define(LMQ_EVENT, lmq_event).
 
 all() ->
     [emit_new_message, handle_new_message].
@@ -36,9 +35,7 @@ emit_new_message(Config) ->
     Name = ?config(qname, Config),
     Q = lmq_queue_mgr:get(Name, [create]),
     lmq_queue:push(Q, 1),
-    receive {test_handler, {local, {new_message, Name}}} -> ok
-    after 50 -> ct:fail(no_response)
-    end.
+    ?EVENT_OR_FAIL({local, {new_message, Name}}).
 
 handle_new_message(Config) ->
     Name = ?config(qname, Config),

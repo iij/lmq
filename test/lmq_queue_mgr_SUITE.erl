@@ -23,7 +23,9 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(auto_load, Config) ->
+    {ok, _} = lmq_event:start_link(),
     Config;
+
 init_per_testcase(_, Config) ->
     {ok, _} = lmq_event:start_link(),
     {ok, _} = lmq_queue_supersup:start_link(),

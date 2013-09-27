@@ -25,7 +25,9 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(init, Config) ->
+    {ok, _} = lmq_event:start_link(),
     Config;
+
 init_per_testcase(_, Config) ->
     {ok, _} = lmq_event:start_link(),
     {ok, Pid} = lmq_queue:start_link(message),
