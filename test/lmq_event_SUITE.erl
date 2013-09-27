@@ -7,10 +7,12 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([emit_new_message/1, handle_new_message/1, handle_queue_created/1]).
+-export([emit_new_message/1, handle_new_message/1, handle_local_queue_created/1,
+    handle_remote_queue_created/1]).
 
 all() ->
-    [emit_new_message, handle_new_message, handle_queue_created].
+    [emit_new_message, handle_new_message, handle_local_queue_created,
+     handle_remote_queue_created].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -39,7 +41,7 @@ emit_new_message(Config) ->
 
 handle_new_message(Config) ->
     Name = ?config(qname, Config),
-    gen_event:notify(?LMQ_EVENT, {remote, {new_message, Name}}),
+    send_remote_event({new_message, Name}),
     timer:sleep(50),
     not_found = lmq_queue_mgr:get(Name),
 
@@ -48,12 +50,12 @@ handle_new_message(Config) ->
     spawn(fun() -> Parent ! {Q, lmq_queue:pull(Q)} end),
     timer:sleep(50),
     lmq_lib:enqueue(Name, 1),
-    gen_event:notify(?LMQ_EVENT, {remote, {new_message, Name}}),
+    send_remote_event({new_message, Name}),
     receive {Q, M} when M#message.content =:= 1 -> ok
     after 50 -> ct:fail(no_response)
     end.
 
-handle_queue_created(_Config) ->
+handle_local_queue_created(_Config) ->
     lmq_queue_mgr:get('lmq/mpull/a', [create]),
     lmq_queue_mgr:get('lmq/mpull/b', [create]),
     {ok, Pid} = lmq_mpull:start(),
@@ -67,3 +69,36 @@ handle_queue_created(_Config) ->
                     {<<"content">>, <<"push after pull">>}]}} -> ok
     after 50 -> ct:fail(no_response)
     end.
+
+handle_remote_queue_created(_Config) ->
+    %% start the queue if not exists
+    not_found = lmq_queue_mgr:get('lmq/remote/a'),
+    lmq_lib:create('lmq/remote/a', [{retry, 100}]),
+    send_remote_event({queue_created, 'lmq/remote/a'}),
+    timer:sleep(10),
+    Q1 = lmq_queue_mgr:get('lmq/remote/a'),
+    100 = proplists:get_value(retry, lmq_queue:get_properties(Q1)),
+
+    %% update the queue if exists
+    Q2 = lmq_queue_mgr:get('lmq/remote/b', [create]),
+    2 = proplists:get_value(retry, lmq_queue:get_properties(Q2)),
+    lmq_lib:create('lmq/remote/b', [{retry, 100}]),
+    send_remote_event({queue_created, 'lmq/remote/b'}),
+    timer:sleep(10),
+    100 = proplists:get_value(retry, lmq_queue:get_properties(Q2)),
+
+    %% ensure mpull also works
+    lmq_lib:create('lmq/remote/c'),
+    lmq_lib:enqueue('lmq/remote/c', 1),
+    {ok, Pid} = lmq_mpull:start(),
+    Parent = self(), Ref = make_ref(),
+    spawn(fun() -> Parent ! {Ref, lmq_mpull:pull(Pid, <<"lmq/remote/.*">>, 100)} end),
+    not_found = lmq_queue_mgr:get('lmq/remote/c'),
+    send_remote_event({queue_created, 'lmq/remote/c'}),
+    receive {Ref, {[{<<"queue">>, <<"lmq/remote/c">>}, _, _,
+                    {<<"content">>, 1}]}} -> ok
+    after 50 -> ct:fail(no_response)
+    end.
+
+send_remote_event(Event) ->
+    gen_event:notify(?LMQ_EVENT, {remote, Event}).
