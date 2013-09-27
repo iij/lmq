@@ -1,6 +1,7 @@
 -module(lmq_lib_SUITE).
 
 -include("lmq.hrl").
+-include("lmq_test.hrl").
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
@@ -24,8 +25,13 @@ end_per_suite(_Config) ->
     ok.
 
 init_per_testcase(create_delete, Config) ->
+    lmq_event:start_link(),
+    lmq_event:add_handler(lmq_test_handler, self()),
     Config;
+
 init_per_testcase(_, Config) ->
+    lmq_event:start_link(),
+    lmq_event:add_handler(lmq_test_handler, self()),
     Name = test,
     lmq_lib:create(Name),
     [{qname, Name} | Config].
@@ -40,11 +46,23 @@ lmq_info(_Config) ->
     {ok, []} = lmq_lib:get_lmq_info(non_exists, []).
 
 create_delete(_Config) ->
+    %% create new queue
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
     [] = lmq_lib:queue_info(test),
+    ?EVENT_OR_FAIL({local, {queue_created, test}}),
+
+    %% update properties
     ok = lmq_lib:create(test, [{timeout, 10}]),
     [{timeout, 10}] = lmq_lib:queue_info(test),
+    ?EVENT_OR_FAIL({local, {queue_created, test}}),
+
+    %% no event occurred when properties are not changed
+    ok = lmq_lib:create(test, [{timeout, 10}]),
+    [{timeout, 10}] = lmq_lib:queue_info(test),
+    ?EVENT_AND_FAIL({local, {queue_created, test}}),
+
+    %% delete
     ok = lmq_lib:delete(test),
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
     not_found = lmq_lib:queue_info(test),

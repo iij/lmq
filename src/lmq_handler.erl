@@ -20,6 +20,22 @@ handle_event({remote, {new_message, QName}}, State) ->
     end,
     {ok, State};
 
+handle_event({local, {queue_created, Name}}, State) ->
+    lager:debug("local queue_created ~s", [Name]),
+    [lmq_mpull:maybe_pull(Pid, Name) || Pid <- lmq_mpull:list_active()],
+    {ok, State};
+
+handle_event({remote, {queue_created, Name}=E}, State) ->
+    lager:debug("remote queue_created ~s", [Name]),
+    case lmq_queue_mgr:get(Name) of
+        not_found ->
+            lmq_queue_mgr:get(Name, [create]),
+            handle_event({local, E}, State);
+        Pid ->
+            lmq_queue:reload_properties(Pid),
+            {ok, State}
+    end;
+
 handle_event(Event, State) ->
     lager:warning("Unknown event received: ~p", [Event]),
     {ok, State}.

@@ -87,9 +87,16 @@ create(Name, Props) when is_atom(Name) ->
 
     case mnesia:create_table(Name, Def) of
         {atomic, ok} ->
-            ok = transaction(F);
+            ok = transaction(F),
+            lmq_event:queue_created(Name);
         {aborted, {already_exists, Name}} ->
-            ok = transaction(F);
+            case queue_info(Name) of
+                Props ->
+                    ok;
+                _ ->
+                    ok = transaction(F),
+                    lmq_event:queue_created(Name)
+            end;
         Other ->
             lager:error("Failed to create table '~p': ~p", [Name, Other])
     end.
