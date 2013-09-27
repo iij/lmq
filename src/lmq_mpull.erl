@@ -14,7 +14,7 @@
         [self(), Event, State])).
 -define(CLOSE_WAIT, 10).
 
--record(state, {from, regexp, timeout, mapping, end_time}).
+-record(state, {from, regexp, timeout, mapping}).
 
 %% ==================================================================
 %% Public API
@@ -72,20 +72,22 @@ idle(Event, _From, State) ->
     {next_state, idle, State}.
 
 waiting({maybe_pull, QName}, #state{}=S) ->
-    case re:compile(S#state.regexp) of
+    State = case re:compile(S#state.regexp) of
         {ok, MP} ->
             case re:run(atom_to_list(QName), MP) of
                 {match, _} ->
-                    Pid = lmq_queue_mgr:get(QName),
-                    Id = lmq_queue:pull_async(Pid, S#state.timeout),
-                    Mapping = dict:store(Id, {QName, Pid}, S#state.mapping),
-                    {next_state, waiting, S#state{mapping=Mapping}};
-                _ ->
-                    {next_state, waiting, S}
+                    case lmq_queue_mgr:get(QName) of
+                        not_found -> S;
+                        Pid ->
+                            Id = lmq_queue:pull_async(Pid, S#state.timeout),
+                            Mapping = dict:store(Id, {QName, Pid}, S#state.mapping),
+                            S#state{mapping=Mapping}
+                    end;
+                _ -> S
             end;
-        {error, _} ->
-            {next_state, waiting, S}
-    end;
+        {error, _} -> S
+    end,
+    {next_state, waiting, State};
 
 waiting(cancel, #state{timeout=T}=S) when T > 0 ->
     waiting(timeout, S);
