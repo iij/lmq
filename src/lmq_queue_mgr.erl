@@ -77,8 +77,10 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
         error ->
             case proplists:get_value(create, Opts) of
                 true ->
-                    Props = proplists:get_value(props, Opts, []),
-                    {ok, Pid} = lmq_queue:start(Name, Props),
+                    {ok, Pid} = case proplists:get_value(props, Opts) of
+                        undefined -> lmq_queue:start(Name);
+                        Props -> lmq_queue:start(Name, Props)
+                    end,
                     lager:info("The new queue created: ~s ~p", [Name, Pid]),
                     {reply, Pid, update_qmap(Name, Pid, S)};
                 undefined ->
