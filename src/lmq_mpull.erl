@@ -7,7 +7,7 @@
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3,
     terminate/3, code_change/4,
     idle/3, waiting/2, finalize/2]).
--export([start_link/0, pull/2, pull/3, maybe_pull/2]).
+-export([start/0, start_link/0, pull/2, pull/3, maybe_pull/2]).
 
 -define(UNEXPECTED(Event, State),
     lager:warning("~p received unknown event ~p while in state ~p",
@@ -19,6 +19,9 @@
 %% ==================================================================
 %% Public API
 %% ==================================================================
+
+start() ->
+    supervisor:start_child(lmq_mpull_sup, []).
 
 start_link() ->
     gen_fsm:start_link(?MODULE, [], []).
@@ -59,7 +62,7 @@ idle({pull, Regexp, Timeout}, From, #state{}=S) ->
 
 idle(Event, _From, State) ->
     ?UNEXPECTED(Event, idle),
-    {reply, error, idle, State}.
+    {next_state, idle, State}.
 
 waiting({maybe_pull, QName}, #state{}=S) ->
     case re:compile(S#state.regexp) of
@@ -87,14 +90,14 @@ waiting(timeout, #state{}=S) ->
 
 waiting(Event, State) ->
     ?UNEXPECTED(Event, waiting),
-    {reply, error, waiting, State}.
+    {next_state, waiting, State}.
 
 finalize(timeout, State) ->
     {stop, normal, State};
 
 finalize(Event, State) ->
     ?UNEXPECTED(Event, finalize),
-    {reply, error, finalize, State}.
+    {next_state, finalize, State}.
 
 handle_info({Id, #message{}=M}, waiting, #state{mapping=Mapping}=S) ->
     {Name, _} = dict:fetch(Id, Mapping),

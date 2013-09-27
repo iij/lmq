@@ -44,7 +44,7 @@ pull_any(Regexp) ->
 
 pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     lager:info("lmq_api:pull_any(~s, ~p)", [Regexp, Timeout]),
-    {ok, Pid} = lmq_mpull:start_link(),
+    {ok, Pid} = lmq_mpull:start(),
     Timeout1 = case Timeout of
         inifinity -> infinity;
         Float -> round(Float * 1000)
