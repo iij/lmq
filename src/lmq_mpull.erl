@@ -6,7 +6,7 @@
 
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3,
     terminate/3, code_change/4,
-    idle/3, waiting/2, finalize/2]).
+    idle/2, idle/3, waiting/2, finalize/2]).
 -export([start/0, start_link/0, pull/2, pull/3, maybe_pull/2]).
 
 -define(UNEXPECTED(Event, State),
@@ -44,6 +44,10 @@ maybe_pull(Pid, QName) when is_atom(QName) ->
 
 init([]) ->
     {ok, idle, #state{}}.
+
+idle(Event, State) ->
+    ?UNEXPECTED(Event, idle),
+    {next_state, idle, State}.
 
 idle({pull, Regexp, Timeout}, From, #state{}=S) ->
     case lmq_queue_mgr:match(Regexp) of
