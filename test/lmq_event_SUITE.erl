@@ -7,10 +7,10 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
     all/0]).
--export([emit_new_message/1, handle_new_message/1]).
+-export([emit_new_message/1, handle_new_message/1, handle_queue_created/1]).
 
 all() ->
-    [emit_new_message, handle_new_message].
+    [emit_new_message, handle_new_message, handle_queue_created].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -50,5 +50,20 @@ handle_new_message(Config) ->
     lmq_lib:enqueue(Name, 1),
     gen_event:notify(?LMQ_EVENT, {remote, {new_message, Name}}),
     receive {Q, M} when M#message.content =:= 1 -> ok
+    after 50 -> ct:fail(no_response)
+    end.
+
+handle_queue_created(_Config) ->
+    lmq_queue_mgr:get('lmq/mpull/a', [create]),
+    lmq_queue_mgr:get('lmq/mpull/b', [create]),
+    {ok, Pid} = lmq_mpull:start(),
+    Parent = self(), Ref = make_ref(),
+    spawn(fun() -> Parent ! {Ref, lmq_mpull:pull(Pid, <<"lmq/mpull/.*">>, 100)} end),
+    timer:sleep(10),
+    Q3 = lmq_queue_mgr:get('lmq/mpull/c', [create]),
+    lmq_queue:push(Q3, <<"push after pull">>),
+
+    receive {Ref, {[{<<"queue">>, <<"lmq/mpull/c">>}, _, _,
+                    {<<"content">>, <<"push after pull">>}]}} -> ok
     after 50 -> ct:fail(no_response)
     end.

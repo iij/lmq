@@ -7,7 +7,7 @@
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3,
     terminate/3, code_change/4,
     idle/2, idle/3, waiting/2, finalize/2]).
--export([start/0, start_link/0, pull/2, pull/3, maybe_pull/2]).
+-export([start/0, start_link/0, pull/2, pull/3, maybe_pull/2, list_active/0]).
 
 -define(UNEXPECTED(Event, State),
     lager:warning("~p received unknown event ~p while in state ~p",
@@ -37,6 +37,9 @@ pull(Pid, Regexp, Timeout) ->
 
 maybe_pull(Pid, QName) when is_atom(QName) ->
     gen_fsm:send_event(Pid, {maybe_pull, QName}).
+
+list_active() ->
+    [Pid || {_, Pid, _, _} <- supervisor:which_children(lmq_mpull_sup)].
 
 %% ==================================================================
 %% gen_fsm callbacks

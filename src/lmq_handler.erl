@@ -20,6 +20,11 @@ handle_event({remote, {new_message, QName}}, State) ->
     end,
     {ok, State};
 
+handle_event({local, {queue_created, Name}}, State) ->
+    lager:debug("local queue_created ~s", [Name]),
+    [lmq_mpull:maybe_pull(Pid, Name) || Pid <- lmq_mpull:list_active()],
+    {ok, State};
+
 handle_event(Event, State) ->
     lager:warning("Unknown event received: ~p", [Event]),
     {ok, State}.
