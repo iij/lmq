@@ -12,6 +12,9 @@
 init([]) ->
     {ok, []}.
 
+handle_event({local, {new_message, _}}, State) ->
+    {ok, State};
+
 handle_event({remote, {new_message, QName}}, State) ->
     lager:debug("new message arrived at remote queue ~s", [QName]),
     case lmq_queue_mgr:get(QName) of
