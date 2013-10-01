@@ -1,6 +1,6 @@
 -module(lmq_console).
 
--export([join/1, leave/1, add_new_node/1]).
+-export([join/1, leave/1, add_new_node/1, status/1]).
 
 join([NodeStr]) when is_list(NodeStr) ->
     Node = list_to_atom(NodeStr),
@@ -41,6 +41,24 @@ add_new_node(Node) ->
         {ok, _} -> copy_all_tables(Node);
         {error, _}=E -> E
     end.
+
+status([]) ->
+    Status = lmq:status(),
+    io:format("   All nodes: ~s~n", [string:join(
+        [atom_to_list(N) || N <- proplists:get_value(all_nodes, Status)],
+        ", ")]),
+    io:format("Active nodes: ~s~n", [string:join(
+        [atom_to_list(N) || N <- proplists:get_value(active_nodes, Status)],
+        ", ")]),
+    io:format("~n"),
+    lists:foreach(fun({Name, QStatus}) ->
+        io:format("~s ~7.B messages ~15.B bytes~n", [
+            string:left(atom_to_list(Name), 40),
+            proplists:get_value(size, QStatus),
+            proplists:get_value(memory, QStatus)
+            ])
+    end, proplists:get_value(queues, Status)),
+    ok.
 
 copy_all_tables(Node) ->
     Tables = mnesia:system_info(tables),
