@@ -52,7 +52,7 @@ get_default_props() ->
 status() ->
     [{active_nodes, lists:sort(mnesia:system_info(running_db_nodes))},
      {all_nodes, lists:sort(mnesia:system_info(db_nodes))},
-     {queues, [{N, queue_status(N)} || N <- lmq_lib:all_queue_names()]}
+     {queues, [{N, queue_status(N)} || N <- lists:sort(lmq_lib:all_queue_names())]}
     ].
 
 queue_status(Name) ->
