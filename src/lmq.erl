@@ -58,7 +58,8 @@ status() ->
 queue_status(Name) ->
     [{size, mnesia:table_info(Name, size)},
      {memory, mnesia:table_info(Name, memory) * erlang:system_info(wordsize)},
-     {nodes, mnesia:table_info(Name, where_to_write)}
+     {nodes, mnesia:table_info(Name, where_to_write)},
+     {props, lmq_lib:get_properties(Name)}
     ].
 
 %% ==================================================================

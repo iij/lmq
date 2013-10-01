@@ -73,7 +73,8 @@ properties(_Config) ->
     timer:sleep(50),
     P2 = lmq_queue:get_properties(Q1),
     P2 = lmq_queue:get_properties(Q2),
-    P3 = lmq_queue:get_properties(Q3).
+    P3 = lmq_queue:get_properties(Q3),
+    lmq:set_default_props([]).
 
 status(Config) ->
     Name = ?config(qname, Config),
@@ -86,4 +87,5 @@ status(Config) ->
     QStatus = proplists:get_value(Name, proplists:get_value(queues, Status)),
     1 = proplists:get_value(size, QStatus),
     true = proplists:get_value(memory, QStatus) > 0,
-    [Node] = proplists:get_value(nodes, QStatus).
+    [Node] = proplists:get_value(nodes, QStatus),
+    ?DEFAULT_QUEUE_PROPS = proplists:get_value(props, QStatus).

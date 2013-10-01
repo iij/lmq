@@ -56,7 +56,13 @@ status([]) ->
             string:left(atom_to_list(Name), 40),
             proplists:get_value(size, QStatus),
             proplists:get_value(memory, QStatus)
-            ])
+        ]),
+        Props = proplists:get_value(props, QStatus),
+        io:format("  pack: ~p, retry: ~B, timeout: ~p~n", [
+            proplists:get_value(pack, Props) / 1000,
+            proplists:get_value(retry, Props),
+            proplists:get_value(timeout, Props) / 1
+        ])
     end, proplists:get_value(queues, Status)),
     ok.
 
