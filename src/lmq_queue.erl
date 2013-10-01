@@ -88,6 +88,7 @@ stop(Pid) ->
 init(Name) ->
     lager:info("Starting the queue: ~s ~p", [Name, self()]),
     Props = lmq_lib:get_properties(Name),
+    %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
     {ok, #state{name=Name, props=Props}}.
 
