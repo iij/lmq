@@ -4,7 +4,6 @@
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
     done/2, retain/2, release/2, props/2, get_properties/1,
     reload_properties/1]).
--export([get_metric_name/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
@@ -91,7 +90,7 @@ init(Name) ->
     Props = lmq_lib:get_properties(Name),
     %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
-    ok = new_metrics(Name),
+    ok = lmq_metrics:create_queue_metrics(Name),
     {ok, #state{name=Name, props=Props}}.
 
 handle_call(stop, _From, State) ->
@@ -156,7 +155,7 @@ handle_queue_call({push, Content}, _From, S=#state{}) ->
     end,
     R = lmq_lib:enqueue(S#state.name, Content, Opts),
     lmq_event:new_message(S#state.name),
-    folsom_metrics:notify({get_metric_name(S#state.name, push), 1}),
+    lmq_metrics:update_metric(S#state.name, push),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
@@ -215,7 +214,7 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                         {_, _}=From -> gen_server:reply(From, Msg);
                         P when is_pid(P) -> P ! {Ref, Msg}
                     end,
-                    folsom_metrics:notify({get_metric_name(S#state.name, pull), 1}),
+                    lmq_metrics:update_metric(S#state.name, pull),
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->
@@ -275,45 +274,3 @@ prepare_sleep(S=#state{}) ->
                     end
             end
     end.
-
-new_metrics(Name) when is_atom(Name) ->
-    folsom_metrics:new_meter(get_metric_name(Name, push)),
-    folsom_metrics:new_meter(get_metric_name(Name, pull)),
-    folsom_metrics:new_histogram(get_metric_name(Name, retention),
-        slide_uniform, {60, 100}),
-
-    Metrics = [get_metric_name(Name, push),
-               get_metric_name(Name, pull),
-               get_metric_name(Name, retention)],
-    [folsom_metrics:tag_metric(M, Name) || M <- Metrics],
-    [folsom_metrics:tag_metric(M, ?LMQ_ALL_METRICS) || M <- Metrics],
-    ok.
-
-get_metric_name(Name, Type) when is_atom(Name), is_atom(Type) ->
-    get_metric_name(atom_to_binary(Name, latin1), Type);
-
-get_metric_name(Name, push) when is_binary(Name) ->
-    get_metric_name(Name, <<"push">>);
-
-get_metric_name(Name, pull) when is_binary(Name) ->
-    get_metric_name(Name, <<"pull">>);
-
-get_metric_name(Name, retention) when is_binary(Name) ->
-    get_metric_name(Name, <<"retention">>);
-
-get_metric_name(Name, Type) when is_binary(Name), is_binary(Type) ->
-    <<Name/binary, <<$_>>/binary, Type/binary>>.
-
-%% ==================================================================
-%% EUnit tests
-%% ==================================================================
-
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
-
-get_metric_name_test() ->
-    ?assertEqual(<<"foo_push">>, get_metric_name(foo, push)),
-    ?assertEqual(<<"foo_pull">>, get_metric_name(foo, pull)),
-    ?assertEqual(<<"foo_retention">>, get_metric_name(foo, retention)).
-
--endif.

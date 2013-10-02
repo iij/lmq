@@ -66,10 +66,9 @@ stats() ->
     [stats(N) || N <- lists:sort(lmq_lib:all_queue_names())].
 
 stats(Name) when is_atom(Name) ->
-    {Name, [{push, folsom_metrics:get_metric_value(lmq_queue:get_metric_name(Name, push))},
-            {pull, folsom_metrics:get_metric_value(lmq_queue:get_metric_name(Name, pull))},
-            {retention, folsom_metrics:get_histogram_statistics(
-                        lmq_queue:get_metric_name(Name, retention))}
+    {Name, [{push, lmq_metrics:get_metric(Name, push)},
+            {pull, lmq_metrics:get_metric(Name, pull)},
+            {retention, lmq_metrics:get_metric(Name, retention)}
     ]}.
 
 %% ==================================================================

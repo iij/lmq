@@ -148,8 +148,7 @@ pack_message(Name, Content, Opts) ->
 dequeue(Name, Timeout) ->
     case transaction(fun() -> get_first_message(Name, Timeout) end) of
         {ok, Msg, Retention} ->
-            Metric = lmq_queue:get_metric_name(Name, retention),
-            folsom_metrics:notify({Metric, Retention}),
+            lmq_metrics:update_metric(Name, retention, Retention),
             Msg;
         Other ->
             Other
