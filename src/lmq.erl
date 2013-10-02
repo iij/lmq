@@ -4,10 +4,10 @@
 -export([start/0, stop/0]).
 -export([push/2, pull/1, pull/2, update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
-    status/0, queue_status/1]).
+    status/0, queue_status/1, stats/0, stats/1]).
 
 -define(DEPS, [lager, crypto, quickrand, uuid, msgpack, msgpack_rpc,
-    mnesia, ranch, lmq]).
+    mnesia, ranch, folsom, lmq]).
 
 %% ==================================================================
 %% Public API
@@ -61,6 +61,12 @@ queue_status(Name) ->
      {nodes, mnesia:table_info(Name, where_to_write)},
      {props, lmq_lib:get_properties(Name)}
     ].
+
+stats() ->
+    stats(?LMQ_ALL_METRICS).
+
+stats(Name) when is_atom(Name) ->
+    folsom_metrics:get_metrics_value(Name).
 
 %% ==================================================================
 %% Private functions

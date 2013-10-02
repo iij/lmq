@@ -17,6 +17,7 @@ init_per_suite(Config) ->
     application:start(mnesia),
     application:set_env(mnesia, dir, Priv),
     application:start(lager),
+    application:start(folsom),
     ok = lmq_lib:init_mnesia(),
     Config.
 

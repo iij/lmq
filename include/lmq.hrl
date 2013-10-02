@@ -12,3 +12,5 @@
 -define(QUEUE_INFO_TABLE_DEFS, [{type, set},
     {attributes, record_info(fields, queue_info)},
     {record_name, queue_info}]).
+
+-define(LMQ_ALL_METRICS, all).
