@@ -4,6 +4,7 @@
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
     done/2, retain/2, release/2, props/2, get_properties/1,
     reload_properties/1]).
+-export([get_metric_name/2]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 

@@ -63,10 +63,14 @@ queue_status(Name) ->
     ].
 
 stats() ->
-    stats(?LMQ_ALL_METRICS).
+    [stats(N) || N <- lists:sort(lmq_lib:all_queue_names())].
 
 stats(Name) when is_atom(Name) ->
-    folsom_metrics:get_metrics_value(Name).
+    {Name, [{push, folsom_metrics:get_metric_value(lmq_queue:get_metric_name(Name, push))},
+            {pull, folsom_metrics:get_metric_value(lmq_queue:get_metric_name(Name, pull))},
+            {retention, folsom_metrics:get_histogram_statistics(
+                        lmq_queue:get_metric_name(Name, retention))}
+    ]}.
 
 %% ==================================================================
 %% Private functions
