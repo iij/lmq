@@ -4,10 +4,10 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([pull/1, update_props/1, properties/1, status/1]).
+-export([pull/1, update_props/1, properties/1, status/1, stats/1]).
 
 all() ->
-    [pull, update_props, properties, status].
+    [pull, update_props, properties, status, stats].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -89,3 +89,10 @@ status(Config) ->
     true = proplists:get_value(memory, QStatus) > 0,
     [Node] = proplists:get_value(nodes, QStatus),
     ?DEFAULT_QUEUE_PROPS = proplists:get_value(props, QStatus).
+
+stats(Config) ->
+    Name = ?config(qname, Config),
+    Q = lmq_queue_mgr:get(Name, [create]),
+    lmq_queue:push(Q, 1),
+    Stats = proplists:get_value(Name, lmq:stats()),
+    [push, pull, retention] = proplists:get_keys(Stats).
