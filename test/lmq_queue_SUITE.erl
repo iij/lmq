@@ -4,13 +4,16 @@
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2,
-    all/0]).
+    all/0, groups/0]).
 -export([init/1, push_pull_done/1, release/1, release_multi/1, multi_queue/1,
-    pull_timeout/1, async_request/1, pull_async/1]).
+    pull_timeout/1, async_request/1, pull_async/1, pull_and_timeout/1]).
 
 all() ->
     [init, push_pull_done, release, release_multi, multi_queue, pull_timeout,
-    async_request, pull_async].
+    async_request, pull_async, {group, timing}].
+
+groups() ->
+    [{timing, [{repeat_until_any_fail, 10}], [pull_and_timeout]}].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -174,4 +177,19 @@ pull_async(_Config) ->
     ok = lmq_queue:pull_cancel(Q, Id3),
     receive {Id3, _} -> ct:fail(cancel_failed)
     after 150 -> ok
+    end.
+
+pull_and_timeout(Config) ->
+    Pid = ?config(queue, Config),
+    Parent = self(),
+    Ref = make_ref(),
+    F = fun() -> Parent ! {Ref, lmq_queue:pull(Pid, 0.01)} end,
+    [spawn(F) || _ <- lists:seq(1, 100)],
+    wait_pull_and_timeout(Ref, 100).
+
+wait_pull_and_timeout(_, 0) ->
+    ok;
+wait_pull_and_timeout(Ref, N) ->
+    receive {Ref, empty} -> wait_pull_and_timeout(Ref, N-1)
+    after 200 -> ct:fail(no_response)
     end.

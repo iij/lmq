@@ -42,8 +42,11 @@ pull(Pid, 0) ->
     end;
 
 pull(Pid, Timeout) ->
-    try gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
-        R -> R
+    try
+        case gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
+            {error, timeout} -> empty;
+            R -> R
+        end
     catch
         exit:{timeout, _} -> empty
     end.
