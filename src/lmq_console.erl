@@ -1,6 +1,6 @@
 -module(lmq_console).
 
--export([join/1, leave/1, add_new_node/1, status/1]).
+-export([join/1, leave/1, add_new_node/1, status/1, stats/1]).
 
 join([NodeStr]) when is_list(NodeStr) ->
     Node = list_to_atom(NodeStr),
@@ -65,6 +65,20 @@ status([]) ->
         ])
     end, proplists:get_value(queues, Status)),
     ok.
+
+stats([]) ->
+    lists:foreach(fun({Name, Info}) ->
+        Push = proplists:get_value(push, Info),
+        Pull = proplists:get_value(pull, Info),
+        Retention = proplists:get_value(retention, Info),
+        io:format("~s~n", [Name]),
+        io:format("  push rate: 1min ~.2f, 5min ~.2f, 15min ~.2f, 1day ~.2f~n", [
+            proplists:get_value(K, Push) || K <- [one, five, fifteen, day]]),
+        io:format("  pull rate: 1min ~.2f, 5min ~.2f, 15min ~.2f, 1day ~.2f~n", [
+            proplists:get_value(K, Pull) || K <- [one, five, fifteen, day]]),
+        io:format("  retention time: min ~.3f, max ~.3f, mean ~.3f, median ~.3f~n", [
+            proplists:get_value(K, Retention) || K <- [min, max, arithmetic_mean, median]])
+    end, lmq:stats()).
 
 copy_all_tables(Node) ->
     Tables = mnesia:system_info(tables),

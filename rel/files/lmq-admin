@@ -99,8 +99,12 @@ case "$1" in
         ensure_node_is_up
         $NODETOOL rpc lmq_console status
         ;;
+    stats)
+        ensure_node_is_up
+        $NODETOOL rpc lmq_console stats
+        ;;
     *)
-        echo "Usage: $SCRIPT {join|leave|status}"
+        echo "Usage: $SCRIPT {join|leave|status|stats}"
         exit 1
         ;;
 esac
