@@ -6,11 +6,12 @@
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1, packing/1, property/1]).
+    limit_retry/1, error_case/1, packing/1, property/1, many_waste_messages/1]).
+-export([enqueue_many/2]).
 
 all() ->
     [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case, packing, property].
+     error_case, packing, property, many_waste_messages].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -192,3 +193,12 @@ property(_Config) ->
     P1 = lmq_lib:get_properties(N1),
     P4 = lmq_lib:get_properties(N2),
     P5 = lmq_lib:get_properties(N3).
+
+many_waste_messages(Config) ->
+    Name = ?config(qname, Config),
+    rpc:pmap({?MODULE, enqueue_many}, [Name], lists:seq(1, 10)),
+    ct:timetrap(10000),
+    empty = lmq_lib:dequeue(Name, 0).
+
+enqueue_many(I, Name) ->
+    [lmq_lib:enqueue(Name, I*N, [{retry, -1}]) || N <- lists:seq(1, 1000)].

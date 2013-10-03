@@ -150,6 +150,8 @@ dequeue(Name, Timeout) ->
         {ok, Msg, Retention} ->
             lmq_metrics:update_metric(Name, retention, Retention),
             Msg;
+        continue ->
+            dequeue(Name, Timeout);
         Other ->
             Other
     end.
@@ -178,7 +180,9 @@ get_first_message(Name, Timeout) ->
                             mnesia:write(Name, NewMsg, write),
                             {ok, NewMsg, Now - TS};
                         _ ->
-                            get_first_message(Name, Timeout)
+                            %% quit transaction to avoid infinite loop caused by
+                            %% large amount of waste messages
+                            continue
                     end
             end
     end.
