@@ -90,6 +90,7 @@ init(Name) ->
     Props = lmq_lib:get_properties(Name),
     %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
+    ok = lmq_metrics:create_queue_metrics(Name),
     {ok, #state{name=Name, props=Props}}.
 
 handle_call(stop, _From, State) ->
@@ -154,6 +155,7 @@ handle_queue_call({push, Content}, _From, S=#state{}) ->
     end,
     R = lmq_lib:enqueue(S#state.name, Content, Opts),
     lmq_event:new_message(S#state.name),
+    lmq_metrics:update_metric(S#state.name, push),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
@@ -212,6 +214,7 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                         {_, _}=From -> gen_server:reply(From, Msg);
                         P when is_pid(P) -> P ! {Ref, Msg}
                     end,
+                    lmq_metrics:update_metric(S#state.name, pull),
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->

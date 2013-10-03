@@ -146,7 +146,13 @@ pack_message(Name, Content, Opts) ->
     end).
 
 dequeue(Name, Timeout) ->
-    transaction(fun() -> get_first_message(Name, Timeout) end).
+    case transaction(fun() -> get_first_message(Name, Timeout) end) of
+        {ok, Msg, Retention} ->
+            lmq_metrics:update_metric(Name, retention, Retention),
+            Msg;
+        Other ->
+            Other
+    end.
 
 get_first_message(Name, Timeout) ->
     case mnesia:first(Name) of
@@ -166,11 +172,11 @@ get_first_message(Name, Timeout) ->
                         infinity ->
                             NewMsg = M#message{id=NewId, state=processing},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg;
+                            {ok, NewMsg, Now - TS};
                         N when N > 0 ->
                             NewMsg = M#message{id=NewId, state=processing, retry=N-1},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg;
+                            {ok, NewMsg, Now - TS};
                         _ ->
                             get_first_message(Name, Timeout)
                     end

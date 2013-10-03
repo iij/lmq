@@ -11,7 +11,8 @@
                   mnesia,
                   ranch,
                   msgpack,
-                  msgpack_rpc
+                  msgpack_rpc,
+                  folsom
                  ]},
   {mod, { lmq_app, []}},
   {env, [
