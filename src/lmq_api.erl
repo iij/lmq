@@ -44,41 +44,12 @@ pull_any(Regexp) ->
 
 pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     lager:info("lmq_api:pull_any(~s, ~p)", [Regexp, Timeout]),
+    {ok, Pid} = lmq_mpull:start(),
     Timeout1 = case Timeout of
         inifinity -> infinity;
-        0 -> infinity;
         Float -> round(Float * 1000)
     end,
-    Queues = case lmq_queue_mgr:match(Regexp) of
-        {error, Reason} -> throw(Reason);
-        Other -> Other
-    end,
-    Mapping = lists:foldl(fun({_, Pid}=Q, Acc) ->
-        Id = lmq_queue:pull_async(Pid, Timeout),
-        dict:store(Id, Q, Acc)
-    end, dict:new(), Queues),
-    %% waiting for asynchronous response
-    wait_pull_any_response(Mapping, Timeout1).
-
-wait_pull_any_response(Mapping, Timeout) ->
-    receive
-        {Id, M=#message{}} ->
-            {Name, _} = dict:fetch(Id, Mapping),
-            cancel_pull(dict:erase(Id, Mapping)),
-            {Response} = lmq_lib:export_message(M),
-            {[{<<"queue">>, atom_to_binary(Name, latin1)} | Response]};
-        {Id, {error, Reason}} ->
-            Mapping1 = dict:erase(Id, Mapping),
-            lager:debug("pull_any for ~p: ~p, rest ~p",
-                [element(1, dict:fetch(Id, Mapping)), Reason, dict:size(Mapping1)]),
-            case dict:size(Mapping1) of
-                0 -> <<"empty">>;
-                _ -> wait_pull_any_response(Mapping1, 10)
-            end
-    after Timeout ->
-        cancel_pull(Mapping),
-        <<"empty">>
-    end.
+    lmq_mpull:pull(Pid, Regexp, Timeout1).
 
 done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     lager:info("lmq_api:done(~s, ~s)", [Name, UUID]),
@@ -133,23 +104,6 @@ find(Name) when is_binary(Name) ->
     case lmq_queue_mgr:get(Name1) of
         not_found -> throw(queue_not_found);
         Pid -> Pid
-    end.
-
-cancel_pull(Mapping) ->
-    dict:map(fun(Id, {_, Pid}) -> lmq_queue:pull_cancel(Pid, Id) end, Mapping),
-    release_messages(Mapping).
-
-release_messages(Mapping) ->
-    receive
-        {Id, M=#message{}} ->
-            {_, Pid} = dict:fetch(Id, Mapping),
-            {_, UUID} = M#message.id,
-            lmq_queue:release(Pid, UUID),
-            release_messages(Mapping);
-        {_Id, {error, _Reason}} ->
-            ok
-    after 0 ->
-        ok
     end.
 
 convert_uuid(UUID) when is_binary(UUID) ->

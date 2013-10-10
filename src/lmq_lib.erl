@@ -10,17 +10,9 @@
     get_properties/1, get_properties/2]).
 
 init_mnesia() ->
-    application:stop(mnesia),
-    case mnesia:create_schema([node()]) of
-        ok ->
-            lager:info("schema directory created."),
-            ok = application:start(mnesia),
-            lager:info("admin table created."),
-            ok = lmq_lib:create_admin_table();
-        {error, {_, {already_exists, _}}} ->
-            ok = application:start(mnesia);
-        Other ->
-            Other
+    case mnesia:system_info(db_nodes) =:= [node()] of
+        true -> create_admin_table();
+        false -> ok
     end.
 
 create_admin_table() ->
@@ -87,16 +79,24 @@ create(Name, Props) when is_atom(Name) ->
     Def = [
         {type, ordered_set},
         {attributes, record_info(fields, message)},
-        {record_name, message}
+        {record_name, message},
+        {ram_copies, mnesia:system_info(db_nodes)}
     ],
     Info = #queue_info{name=Name, props=Props},
     F = fun() -> mnesia:write(?QUEUE_INFO_TABLE, Info, write) end,
 
     case mnesia:create_table(Name, Def) of
         {atomic, ok} ->
-            ok = transaction(F);
+            ok = transaction(F),
+            lmq_event:queue_created(Name);
         {aborted, {already_exists, Name}} ->
-            ok = transaction(F);
+            case queue_info(Name) of
+                Props ->
+                    ok;
+                _ ->
+                    ok = transaction(F),
+                    lmq_event:queue_created(Name)
+            end;
         Other ->
             lager:error("Failed to create table '~p': ~p", [Name, Other])
     end.
@@ -146,7 +146,15 @@ pack_message(Name, Content, Opts) ->
     end).
 
 dequeue(Name, Timeout) ->
-    transaction(fun() -> get_first_message(Name, Timeout) end).
+    case transaction(fun() -> get_first_message(Name, Timeout) end) of
+        {ok, Msg, Retention} ->
+            lmq_metrics:update_metric(Name, retention, Retention),
+            Msg;
+        continue ->
+            dequeue(Name, Timeout);
+        Other ->
+            Other
+    end.
 
 get_first_message(Name, Timeout) ->
     case mnesia:first(Name) of
@@ -166,13 +174,15 @@ get_first_message(Name, Timeout) ->
                         infinity ->
                             NewMsg = M#message{id=NewId, state=processing},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg;
+                            {ok, NewMsg, Now - TS};
                         N when N > 0 ->
                             NewMsg = M#message{id=NewId, state=processing, retry=N-1},
                             mnesia:write(Name, NewMsg, write),
-                            NewMsg;
+                            {ok, NewMsg, Now - TS};
                         _ ->
-                            get_first_message(Name, Timeout)
+                            %% quit transaction to avoid infinite loop caused by
+                            %% large amount of waste messages
+                            continue
                     end
             end
     end.

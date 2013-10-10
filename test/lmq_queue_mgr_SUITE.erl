@@ -23,8 +23,11 @@ end_per_suite(_Config) ->
     mnesia:delete_schema([node()]).
 
 init_per_testcase(auto_load, Config) ->
+    {ok, _} = lmq_event:start_link(),
     Config;
+
 init_per_testcase(_, Config) ->
+    {ok, _} = lmq_event:start_link(),
     {ok, _} = lmq_queue_supersup:start_link(),
     Config.
 
@@ -64,7 +67,12 @@ get(_Config) ->
 
     %% ensure old props are considered when updating
     true = is_pid(lmq_queue_mgr:get('get/b', [update, {props, [{pack, 10}]}])),
-    [{pack, 10}, {retry, infinity}] = lmq_lib:queue_info('get/b').
+    [{pack, 10}, {retry, infinity}] = lmq_lib:queue_info('get/b'),
+
+    %% ensure do not override props if exists in mnesia
+    lmq_lib:create('get/c', [{pack, 10}]),
+    true = is_pid(lmq_queue_mgr:get('get/c', [create])),
+    [{pack, 10}] = lmq_lib:queue_info('get/c').
 
 match(_Config) ->
     lmq_queue_mgr:get(foo, [create]),

@@ -1,6 +1,6 @@
 -module(lmq_queue).
 -behaviour(gen_server).
--export([start/1, start/2, start_link/1, start_link/2, stop/1,
+-export([start/1, start/2, start_link/1, start_link/2, stop/1, notify/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
     done/2, retain/2, release/2, props/2, get_properties/1,
     reload_properties/1]).
@@ -42,8 +42,11 @@ pull(Pid, 0) ->
     end;
 
 pull(Pid, Timeout) ->
-    try gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
-        R -> R
+    try
+        case gen_server:call(Pid, {pull, Timeout}, round(Timeout * 1000)) of
+            {error, timeout} -> empty;
+            R -> R
+        end
     catch
         exit:{timeout, _} -> empty
     end.
@@ -75,6 +78,9 @@ get_properties(Pid) ->
 reload_properties(Pid) ->
     gen_server:cast(Pid, reload_properties).
 
+notify(Pid) ->
+    gen_server:cast(Pid, notify).
+
 stop(Pid) ->
     gen_server:call(Pid, stop).
 
@@ -85,7 +91,9 @@ stop(Pid) ->
 init(Name) ->
     lager:info("Starting the queue: ~s ~p", [Name, self()]),
     Props = lmq_lib:get_properties(Name),
+    %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
+    ok = lmq_metrics:create_queue_metrics(Name),
     {ok, #state{name=Name, props=Props}}.
 
 handle_call(stop, _From, State) ->
@@ -106,6 +114,10 @@ handle_cast(reload_properties, S) ->
     Props = lmq_lib:get_properties(S#state.name),
     lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
     State = S#state{props=Props},
+    {State1, Sleep} = prepare_sleep(State),
+    {noreply, State1, Sleep};
+
+handle_cast(notify, State) ->
     {State1, Sleep} = prepare_sleep(State),
     {noreply, State1, Sleep};
 
@@ -145,6 +157,8 @@ handle_queue_call({push, Content}, _From, S=#state{}) ->
         _ -> [{retry, Retry}]
     end,
     R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    lmq_event:new_message(S#state.name),
+    lmq_metrics:update_metric(S#state.name, push),
     {reply, R, S};
 
 handle_queue_call({pull, Timeout}, From={Pid, _}, S=#state{}) ->
@@ -203,6 +217,7 @@ maybe_push_message(S=#state{props=Props, waiting=Waiting}) ->
                         {_, _}=From -> gen_server:reply(From, Msg);
                         P when is_pid(P) -> P ! {Ref, Msg}
                     end,
+                    lmq_metrics:update_metric(S#state.name, pull),
                     S#state{waiting=NewWaiting, monitors=Monitors}
             end;
         {empty, Waiting} ->

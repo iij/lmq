@@ -1,20 +1,23 @@
 -module(lmq_lib_SUITE).
 
 -include("lmq.hrl").
+-include("lmq_test.hrl").
 -include_lib("common_test/include/ct.hrl").
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1, packing/1, property/1]).
+    limit_retry/1, error_case/1, packing/1, property/1, many_waste_messages/1]).
+-export([enqueue_many/2]).
 
 all() ->
     [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case, packing, property].
+     error_case, packing, property, many_waste_messages].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
     application:start(mnesia),
     application:set_env(mnesia, dir, Priv),
+    application:start(folsom),
     ok = lmq_lib:init_mnesia(),
     Config.
 
@@ -24,8 +27,13 @@ end_per_suite(_Config) ->
     ok.
 
 init_per_testcase(create_delete, Config) ->
+    lmq_event:start_link(),
+    lmq_event:add_handler(lmq_test_handler, self()),
     Config;
+
 init_per_testcase(_, Config) ->
+    lmq_event:start_link(),
+    lmq_event:add_handler(lmq_test_handler, self()),
     Name = test,
     lmq_lib:create(Name),
     [{qname, Name} | Config].
@@ -40,11 +48,23 @@ lmq_info(_Config) ->
     {ok, []} = lmq_lib:get_lmq_info(non_exists, []).
 
 create_delete(_Config) ->
+    %% create new queue
     ok = lmq_lib:create(test),
     message = mnesia:table_info(test, record_name),
     [] = lmq_lib:queue_info(test),
+    ?EVENT_OR_FAIL({local, {queue_created, test}}),
+
+    %% update properties
     ok = lmq_lib:create(test, [{timeout, 10}]),
     [{timeout, 10}] = lmq_lib:queue_info(test),
+    ?EVENT_OR_FAIL({local, {queue_created, test}}),
+
+    %% no event occurred when properties are not changed
+    ok = lmq_lib:create(test, [{timeout, 10}]),
+    [{timeout, 10}] = lmq_lib:queue_info(test),
+    ?EVENT_AND_FAIL({local, {queue_created, test}}),
+
+    %% delete
     ok = lmq_lib:delete(test),
     {aborted, {no_exists, _}} = mnesia:delete_table(test),
     not_found = lmq_lib:queue_info(test),
@@ -173,3 +193,12 @@ property(_Config) ->
     P1 = lmq_lib:get_properties(N1),
     P4 = lmq_lib:get_properties(N2),
     P5 = lmq_lib:get_properties(N3).
+
+many_waste_messages(Config) ->
+    Name = ?config(qname, Config),
+    rpc:pmap({?MODULE, enqueue_many}, [Name], lists:seq(1, 10)),
+    ct:timetrap(10000),
+    empty = lmq_lib:dequeue(Name, 0).
+
+enqueue_many(I, Name) ->
+    [lmq_lib:enqueue(Name, I*N, [{retry, -1}]) || N <- lists:seq(1, 1000)].
