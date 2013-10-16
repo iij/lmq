@@ -94,7 +94,7 @@ waiting(cancel, #state{timeout=T}=S) when T > 0 ->
 
 waiting(timeout, #state{}=S) ->
     cancel_pull(S#state.mapping),
-    gen_fsm:reply(S#state.from, <<"empty">>),
+    gen_fsm:reply(S#state.from, empty),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 waiting(Event, State) ->
@@ -111,8 +111,8 @@ finalize(Event, State) ->
 handle_info({Id, #message{}=M}, waiting, #state{mapping=Mapping}=S) ->
     {Name, _} = dict:fetch(Id, Mapping),
     cancel_pull(dict:erase(Id, Mapping)),
-    {Response} = lmq_lib:export_message(M),
-    gen_fsm:reply(S#state.from, {[{<<"queue">>, atom_to_binary(Name, latin1)} | Response]}),
+    Response = lmq_lib:export_message(M),
+    gen_fsm:reply(S#state.from, [{queue, Name} | Response]),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
@@ -121,7 +121,7 @@ handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
         [element(1, dict:fetch(Id, Mapping)), Reason, dict:size(Mapping1)]),
     case dict:size(Mapping1) of
         0 ->
-            gen_fsm:reply(S#state.from, <<"empty">>),
+            gen_fsm:reply(S#state.from, empty),
             %% it is safe to shutdown because all responses are received.
             {stop, normal, S};
         _ ->

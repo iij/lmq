@@ -20,14 +20,14 @@ push(Name, Content) when is_binary(Name) ->
 
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),
-    {Response} = lmq:pull(binary_to_atom(Name, latin1)),
-    {[{<<"queue">>, Name} | Response]}.
+    Response = lmq:pull(binary_to_atom(Name, latin1)),
+    export_message(Response).
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
     case lmq:pull(binary_to_atom(Name, latin1), Timeout) of
-        <<"empty">> -> <<"empty">>;
-        {Response} -> {[{<<"queue">>, Name} | Response]}
+        empty -> <<"empty">>;
+        Response -> export_message(Response)
     end.
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
@@ -49,7 +49,10 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
         inifinity -> infinity;
         Float -> round(Float * 1000)
     end,
-    lmq_mpull:pull(Pid, Regexp, Timeout1).
+    case lmq_mpull:pull(Pid, Regexp, Timeout1) of
+        empty -> <<"empty">>;
+        Msg -> export_message(Msg)
+    end.
 
 done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     lager:info("lmq_api:done(~s, ~s)", [Name, UUID]),
@@ -99,6 +102,10 @@ get_default_props() ->
     lager:info("lmq_api:get_default_props()"),
     export_default_props(lmq:get_default_props()).
 
+%% ==================================================================
+%% Private functions
+%% ==================================================================
+
 find(Name) when is_binary(Name) ->
     Name1 = binary_to_atom(Name, latin1),
     case lmq_queue_mgr:get(Name1) of
@@ -108,6 +115,19 @@ find(Name) when is_binary(Name) ->
 
 convert_uuid(UUID) when is_binary(UUID) ->
     uuid:string_to_uuid(binary_to_list(UUID)).
+
+export_message(Msg) ->
+    export_message(Msg, []).
+
+export_message([{id, V} | Tail], Acc) ->
+    export_message(Tail, [{<<"id">>, V} | Acc]);
+export_message([{K, V} | Tail], Acc) when is_atom(V) ->
+    export_message(Tail, [{atom_to_binary(K, latin1),
+                           atom_to_binary(V, latin1)} | Acc]);
+export_message([{K, V} | Tail], Acc) when is_atom(K) ->
+    export_message(Tail, [{atom_to_binary(K, latin1), V} | Acc]);
+export_message([], Acc) ->
+    {lists:reverse(Acc)}.
 
 normalize_props({Props}) ->
     %% jiffy style to proplists
@@ -176,5 +196,18 @@ export_default_props_test() ->
                   [<<"def">>, {[{<<"retry">>, 0}]}]],
                  export_default_props([{<<"lmq">>, [{pack, 1000}]},
                                        {<<"def">>, [{retry, 0}]}])).
+
+export_message_test() ->
+    Ref = make_ref(),
+    M = #message{content=Ref},
+    UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
+    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
+                   {<<"content">>, Ref}]},
+                 export_message(lmq_lib:export_message(M))),
+
+    M2 = M#message{type=package},
+    ?assertEqual({[{<<"queue">>, <<"test">>}, {<<"id">>, UUID},
+                   {<<"type">>, <<"package">>}, {<<"content">>, Ref}]},
+                 export_message([{queue, test} | lmq_lib:export_message(M2)])).
 
 -endif.

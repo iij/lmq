@@ -311,8 +311,7 @@ get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
 
 export_message(M=#message{}) ->
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
-    {[{<<"id">>, UUID}, {<<"type">>, atom_to_binary(M#message.type, latin1)},
-      {<<"content">>, M#message.content}]}.
+    [{id, UUID}, {type, M#message.type}, {content, M#message.content}].
 
 %% ==================================================================
 %% EUnit tests
@@ -333,13 +332,11 @@ export_message_test() ->
     Ref = make_ref(),
     M = #message{content=Ref},
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
-    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
-                   {<<"content">>, Ref}]},
+    ?assertEqual([{id, UUID}, {type, normal}, {content, Ref}],
                  export_message(M)),
 
     M2 = M#message{type=package},
-    ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"package">>},
-                   {<<"content">>, Ref}]},
+    ?assertEqual([{id, UUID}, {type, package}, {content, Ref}],
                  export_message(M2)).
 
 -endif.

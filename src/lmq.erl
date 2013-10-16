@@ -28,13 +28,13 @@ push(Name, Content) when is_atom(Name) ->
 pull(Name) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
     Msg = lmq_queue:pull(Pid),
-    lmq_lib:export_message(Msg).
+    [{queue, Name} | lmq_lib:export_message(Msg)].
 
 pull(Name, Timeout) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
     case lmq_queue:pull(Pid, Timeout) of
-        empty -> <<"empty">>;
-        Msg -> lmq_lib:export_message(Msg)
+        empty -> empty;
+        Msg -> [{queue, Name} | lmq_lib:export_message(Msg)]
     end.
 
 update_props(Name) when is_atom(Name) ->
