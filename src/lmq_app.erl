@@ -30,7 +30,9 @@ stop(_State) ->
 
 start_cowboy({Ip, Port}) ->
     Dispatch = cowboy_router:compile([
-        {'_', [{"/queues/:name", lmq_cow_queue, []}]}
+        {'_', [{"/queues/:name", lmq_cow_queue, []},
+               {"/messages/:name/:id", lmq_cow_message, []}
+              ]}
     ]),
 
     {ok, Ip2} = inet_parse:address(Ip),

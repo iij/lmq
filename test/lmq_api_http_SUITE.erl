@@ -4,12 +4,13 @@
 
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull/1, accidentally_closed/1]).
+-export([push_pull_ack/1, accidentally_closed/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8280/queues/" ++ Name).
+-define(URL_MESSAGE(Name, Id), "http://localhost:8280/messages/" ++ Name ++ "/" ++ Id).
 
 all() ->
-    [push_pull, accidentally_closed].
+    [push_pull_ack, accidentally_closed].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -30,7 +31,7 @@ end_per_testcase(_, Config) ->
     Name = ?config(qname, Config),
     lmq_queue_mgr:delete(list_to_atom(Name)).
 
-push_pull(Config) ->
+push_pull_ack(Config) ->
     Name = ?config(qname, Config),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [{"content-type", "application/json"}],
@@ -42,9 +43,12 @@ push_pull(Config) ->
     "application/json" = proplists:get_value("content-type", ResHdr2),
     {Msg} = jsonx:decode(list_to_binary(ResBody2)),
     true = list_to_binary(Name) =:= proplists:get_value(<<"queue">>, Msg),
-    true = is_binary(proplists:get_value(<<"id">>, Msg)),
+    MsgId = proplists:get_value(<<"id">>, Msg),
+    true = is_binary(MsgId),
     <<"normal">> = proplists:get_value(<<"type">>, Msg),
-    <<"{\"message\":\"lmq test\"}">> = proplists:get_value(<<"content">>, Msg).
+    <<"{\"message\":\"lmq test\"}">> = proplists:get_value(<<"content">>, Msg),
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [], delete).
 
 accidentally_closed(Config) ->
     Name = ?config(qname, Config),
