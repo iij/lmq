@@ -59,7 +59,7 @@ action(Req, State) ->
 
 action({[{<<"action">>, Action}]}, Req, State) when is_binary(Action) ->
     action(binary_to_existing_atom(Action, latin1), Req, State);
-action(Fun, Req, State) when Fun =:= abort ->
+action(Fun, Req, State) when Fun =:= abort orelse Fun =:= keep ->
     {Queue, Req2} = cowboy_req:binding(name, Req),
     {MsgId, Req3} = cowboy_req:binding(id, Req2),
     case lmq:Fun(Queue, MsgId) of
