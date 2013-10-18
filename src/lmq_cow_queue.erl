@@ -23,8 +23,21 @@ to_json(Req, State) ->
 
 handle({<<"GET">>, Req}, State) ->
     {Queue, Req2} = cowboy_req:binding(name, Req),
-    Resp = lmq:pull(binary_to_atom(Queue, latin1)),
-    {jsonx:encode(Resp), Req2, State}.
+    [Socket, Transport] = cowboy_req:get([socket, transport], Req2),
+    Transport:setopts(Socket, [{active, once}]),
+    {_, Closed, Error} = Transport:messages(),
+
+    QPid = lmq_queue_mgr:get(binary_to_atom(Queue, latin1), [create]),
+    Id = lmq_queue:pull_async(QPid),
+    receive
+        {Id, Msg} ->
+            Resp = [{queue, Queue} | lmq_lib:export_message(Msg)],
+            {jsonx:encode(Resp), Req2, State};
+        {Closed, Socket} ->
+            {halt, Req2, State};
+        {Error, Socket, _Reason} ->
+            {halt, Req2, State}
+    end.
 
 process_post(Req, State) ->
     {Queue, Req2} = cowboy_req:binding(name, Req),
