@@ -70,9 +70,7 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     {ok, Pid} = lmq_mpull:start(),
     lmq_mpull:pull(Pid, Regexp, Timeout).
 
-update_props(Name) when is_binary(Name) ->
-    update_props(binary_to_atom(Name, latin1));
-update_props(Name) when is_atom(Name) ->
+update_props(Name) ->
     update_props(Name, []).
 
 update_props(Name, Props) when is_binary(Name) ->
