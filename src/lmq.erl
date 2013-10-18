@@ -21,15 +21,21 @@ stop() ->
     [application:stop(Dep) || Dep <- lists:reverse(?DEPS)],
     ok.
 
+push(Name, Content) when is_binary(Name) ->
+    push(binary_to_atom(Name, latin1), Content);
 push(Name, Content) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
     lmq_queue:push(Pid, Content).
 
+pull(Name) when is_binary(Name) ->
+    pull(binary_to_atom(Name, latin1));
 pull(Name) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
     Msg = lmq_queue:pull(Pid),
     [{queue, Name} | lmq_lib:export_message(Msg)].
 
+pull(Name, Timeout) when is_binary(Name) ->
+    pull(binary_to_atom(Name, latin1), Timeout);
 pull(Name, Timeout) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
     case lmq_queue:pull(Pid, Timeout) of
@@ -37,9 +43,13 @@ pull(Name, Timeout) when is_atom(Name) ->
         Msg -> [{queue, Name} | lmq_lib:export_message(Msg)]
     end.
 
+update_props(Name) when is_binary(Name) ->
+    update_props(binary_to_atom(Name, latin1));
 update_props(Name) when is_atom(Name) ->
     update_props(Name, []).
 
+update_props(Name, Props) when is_binary(Name) ->
+    update_props(binary_to_atom(Name, latin1), Props);
 update_props(Name, Props) when is_atom(Name) ->
     lmq_queue_mgr:get(Name, [create, update, {props, Props}]).
 

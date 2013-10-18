@@ -13,19 +13,19 @@ delete(Name) when is_binary(Name) ->
 
 push(Name, Content) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ...)", [Name]),
-    case lmq:push(binary_to_atom(Name, latin1), Content) of
+    case lmq:push(Name, Content) of
         packing_started -> <<"packing started">>;
         Other -> list_to_binary(atom_to_list(Other))
     end.
 
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),
-    Response = lmq:pull(binary_to_atom(Name, latin1)),
+    Response = lmq:pull(Name),
     export_message(Response).
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
-    case lmq:pull(binary_to_atom(Name, latin1), Timeout) of
+    case lmq:pull(Name, Timeout) of
         empty -> <<"empty">>;
         Response -> export_message(Response)
     end.
@@ -83,12 +83,12 @@ release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
 
 update_props(Name) when is_binary(Name) ->
     lager:info("lmq_api:update_props(~s)", [Name]),
-    lmq:update_props(binary_to_atom(Name, latin1)),
+    lmq:update_props(Name),
     <<"ok">>.
 
 update_props(Name, Props) when is_binary(Name) ->
     lager:info("lmq_api:update_props(~s, ~p)", [Name, Props]),
-    lmq:update_props(binary_to_atom(Name, latin1), normalize_props(Props)),
+    lmq:update_props(Name, normalize_props(Props)),
     <<"ok">>.
 
 set_default_props(PropsList) ->
