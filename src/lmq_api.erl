@@ -7,8 +7,7 @@
 
 delete(Name) when is_binary(Name) ->
     lager:info("lmq_api:delete(~s)", [Name]),
-    Name1 = binary_to_atom(Name, latin1),
-    ok = lmq_queue_mgr:delete(Name1),
+    ok = lmq:delete(Name),
     <<"ok">>.
 
 push(Name, Content) when is_binary(Name) ->
