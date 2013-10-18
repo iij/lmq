@@ -32,24 +32,21 @@ pull(Name, Timeout) when is_binary(Name) ->
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
     lager:info("lmq_api:push_all(~s, ...)", [Regexp]),
-    Queues = case lmq_queue_mgr:match(Regexp) of
-        {error, Reason} -> throw(Reason);
-        Other -> Other
-    end,
-    [lmq_queue:push(Pid, Content) || {_, Pid} <- Queues],
-    <<"ok">>.
+    case lmq:push_all(Regexp, Content) of
+        ok -> <<"ok">>;
+        {error, Reason} -> throw(Reason)
+    end.
 
 pull_any(Regexp) ->
     pull_any(Regexp, inifinity).
 
 pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     lager:info("lmq_api:pull_any(~s, ~p)", [Regexp, Timeout]),
-    {ok, Pid} = lmq_mpull:start(),
-    Timeout1 = case Timeout of
-        inifinity -> infinity;
-        Float -> round(Float * 1000)
+    Timeout2 = if
+        is_number(Timeout) -> round(Timeout * 1000);
+        true -> Timeout
     end,
-    case lmq_mpull:pull(Pid, Regexp, Timeout1) of
+    case lmq:pull_any(Regexp, Timeout2) of
         empty -> <<"empty">>;
         Msg -> export_message(Msg)
     end.

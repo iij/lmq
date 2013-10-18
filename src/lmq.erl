@@ -3,6 +3,7 @@
 -include("lmq.hrl").
 -export([start/0, stop/0]).
 -export([push/2, pull/1, pull/2, ack/2, abort/2, keep/2,
+    push_all/2, pull_any/1, pull_any/2,
     update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
     status/0, queue_status/1, stats/0, stats/1]).
@@ -52,6 +53,22 @@ abort(Name, UUID) ->
 
 keep(Name, UUID) ->
     process_message(retain, Name, UUID).
+
+push_all(Regexp, Content) when is_binary(Regexp) ->
+    case lmq_queue_mgr:match(Regexp) of
+        {error, _}=R ->
+            R;
+        Queues ->
+            [lmq_queue:push(Pid, Content) || {_, Pid} <- Queues],
+            ok
+    end.
+
+pull_any(Regexp) ->
+    pull_any(Regexp, inifinity).
+
+pull_any(Regexp, Timeout) when is_binary(Regexp) ->
+    {ok, Pid} = lmq_mpull:start(),
+    lmq_mpull:pull(Pid, Regexp, Timeout).
 
 update_props(Name) when is_binary(Name) ->
     update_props(binary_to_atom(Name, latin1));
