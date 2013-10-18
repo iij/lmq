@@ -4,13 +4,14 @@
 
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_ack/1, accidentally_closed/1]).
+-export([push_pull_ack/1, accidentally_closed/1, abort/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8280/queues/" ++ Name).
 -define(URL_MESSAGE(Name, Id), "http://localhost:8280/messages/" ++ Name ++ "/" ++ Id).
+-define(CT_JSON, {"content-type", "application/json"}).
 
 all() ->
-    [push_pull_ack, accidentally_closed].
+    [push_pull_ack, accidentally_closed, abort].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -56,8 +57,7 @@ accidentally_closed(Config) ->
         [{inactivity_timeout, 100}]),
 
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
-        [{"content-type", "application/json"}],
-        post, "{\"testcase\":\"accidentally_closed\"}"),
+        [?CT_JSON], post, "{\"testcase\":\"accidentally_closed\"}"),
     "application/json" = proplists:get_value("content-type", ResHdr),
     "{\"packing\":\"no\"}" = ResBody,
 
@@ -66,3 +66,27 @@ accidentally_closed(Config) ->
     "application/json" = proplists:get_value("content-type", ResHdr2),
     {Msg} = jsonx:decode(list_to_binary(ResBody2)),
     <<"{\"testcase\":\"accidentally_closed\"}">> = proplists:get_value(<<"content">>, Msg).
+
+abort(Config) ->
+    Name = ?config(qname, Config),
+    Content = "{\"testcase\":\"abort\"}",
+    ContentBin = list_to_binary(Content),
+
+    {ok, "200", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [?CT_JSON], post, Content),
+
+    {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    {Msg} = jsonx:decode(list_to_binary(ResBody)),
+    MsgId = proplists:get_value(<<"id">>, Msg),
+    ContentBin = proplists:get_value(<<"content">>, Msg),
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [?CT_JSON],
+        post, "{\"action\":\"abort\"}"),
+
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [?CT_JSON],
+        post, "{\"action\":\"abort\"}"),
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [], delete),
+
+    ct:timetrap(100),
+    {ok, "200", _, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    {Msg2} = jsonx:decode(list_to_binary(ResBody2)),
+    ContentBin = proplists:get_value(<<"content">>, Msg2).
