@@ -2,7 +2,8 @@
 
 -include("lmq.hrl").
 -export([start/0, stop/0]).
--export([push/2, pull/1, pull/2, update_props/1, update_props/2,
+-export([push/2, pull/1, pull/2, ack/2, abort/2, keep/2,
+    update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
     status/0, queue_status/1, stats/0, stats/1]).
 
@@ -42,6 +43,15 @@ pull(Name, Timeout) when is_atom(Name) ->
         empty -> empty;
         Msg -> [{queue, Name} | lmq_lib:export_message(Msg)]
     end.
+
+ack(Name, UUID) ->
+    process_message(done, Name, UUID).
+
+abort(Name, UUID) ->
+    process_message(release, Name, UUID).
+
+keep(Name, UUID) ->
+    process_message(retain, Name, UUID).
 
 update_props(Name) when is_binary(Name) ->
     update_props(binary_to_atom(Name, latin1));
@@ -90,3 +100,24 @@ ensure_started(App) ->
         ok -> ok;
         {error, {already_started, App}} -> ok
     end.
+
+process_message(Fun, Name, UUID) when is_atom(Fun), is_binary(Name) ->
+    process_message(Fun, binary_to_atom(Name, latin1), UUID);
+process_message(Fun, Name, UUID) when is_atom(Fun), is_atom(Name) ->
+    case lmq_queue_mgr:get(Name) of
+        not_found ->
+            {error, queue_not_found};
+        Pid ->
+            MsgId = parse_uuid(UUID),
+            case lmq_queue:Fun(Pid, MsgId) of
+                ok -> ok;
+                not_found -> {error, not_found}
+            end
+    end.
+
+parse_uuid(UUID) when is_binary(UUID) ->
+    parse_uuid(binary_to_list(UUID));
+parse_uuid(UUID) when is_list(UUID) ->
+    uuid:string_to_uuid(UUID);
+parse_uuid(UUID) ->
+    UUID.

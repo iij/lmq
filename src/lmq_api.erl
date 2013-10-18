@@ -56,30 +56,15 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
 
 done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     lager:info("lmq_api:done(~s, ~s)", [Name, UUID]),
-    Pid = find(Name),
-    UUID1 = convert_uuid(UUID),
-    case lmq_queue:done(Pid, UUID1) of
-        ok -> <<"ok">>;
-        not_found -> throw(not_found)
-    end.
+    process_message(ack, Name, UUID).
 
 retain(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     lager:info("lmq_api:retain(~s, ~s)", [Name, UUID]),
-    Pid = find(Name),
-    UUID1 = convert_uuid(UUID),
-    case lmq_queue:retain(Pid, UUID1) of
-        ok -> <<"ok">>;
-        not_found -> throw(not_found)
-    end.
+    process_message(keep, Name, UUID).
 
 release(Name, UUID) when is_binary(Name), is_binary(UUID) ->
     lager:info("lmq_api:release(~s, ~s)", [Name, UUID]),
-    Pid = find(Name),
-    UUID1 = convert_uuid(UUID),
-    case lmq_queue:release(Pid, UUID1) of
-        ok -> <<"ok">>;
-        not_found -> throw(not_found)
-    end.
+    process_message(abort, Name, UUID).
 
 update_props(Name) when is_binary(Name) ->
     lager:info("lmq_api:update_props(~s)", [Name]),
@@ -106,15 +91,11 @@ get_default_props() ->
 %% Private functions
 %% ==================================================================
 
-find(Name) when is_binary(Name) ->
-    Name1 = binary_to_atom(Name, latin1),
-    case lmq_queue_mgr:get(Name1) of
-        not_found -> throw(queue_not_found);
-        Pid -> Pid
+process_message(Fun, Name, UUID) when is_atom(Fun) ->
+    case lmq:Fun(Name, UUID) of
+        ok -> <<"ok">>;
+        {error, Reason} -> throw(Reason)
     end.
-
-convert_uuid(UUID) when is_binary(UUID) ->
-    uuid:string_to_uuid(binary_to_list(UUID)).
 
 export_message(Msg) ->
     export_message(Msg, []).
