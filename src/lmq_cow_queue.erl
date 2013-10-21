@@ -1,14 +1,30 @@
 -module(lmq_cow_queue).
 
--export([init/3, allowed_methods/2, content_types_provided/2,
-    content_types_accepted/2]).
+-export([init/3, allowed_methods/2, resource_exists/2, delete_resource/2,
+    content_types_provided/2, content_types_accepted/2]).
 -export([to_json/2, process_post/2]).
 
 init(_Transport, _Req, []) ->
     {upgrade, protocol, cowboy_rest}.
 
 allowed_methods(Req, State) ->
-    {[<<"GET">>, <<"POST">>], Req, State}.
+    {[<<"GET">>, <<"POST">>, <<"DELETE">>], Req, State}.
+
+resource_exists(Req, State) ->
+    {Method, Req2} = cowboy_req:method(Req),
+    case Method of
+        <<"DELETE">> ->
+            {Queue, Req3} = cowboy_req:binding(name, Req2),
+            Exists = lmq_queue_mgr:get(binary_to_atom(Queue, latin1)) =/= not_found,
+            {Exists, Req3, State};
+        _ ->
+            {true, Req2, State}
+    end.
+
+delete_resource(Req, State) ->
+    {Queue, Req2} = cowboy_req:binding(name, Req),
+    ok = lmq:delete(binary_to_atom(Queue, latin1)),
+    {true, Req2, State}.
 
 content_types_provided(Req, State) ->
     {[{{<<"application">>, <<"json">>, '*'}, to_json}
