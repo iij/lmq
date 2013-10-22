@@ -24,9 +24,11 @@ pull(Name) when is_binary(Name) ->
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
-    case lmq:pull(Name, Timeout) of
+    {monitors, [{process, Conn}]} = erlang:process_info(self(), monitors),
+    case lmq:pull(Name, Timeout, Conn) of
+        {error, down} -> ok;
         empty -> <<"empty">>;
-        Response -> export_message(Response)
+        Msg -> export_message(Msg)
     end.
 
 push_all(Regexp, Content) when is_binary(Regexp) ->

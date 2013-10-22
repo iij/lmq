@@ -2,7 +2,7 @@
 
 -include("lmq.hrl").
 -export([start/0, stop/0]).
--export([push/2, pull/1, pull/2, ack/2, abort/2, keep/2,
+-export([push/2, pull/1, pull/2, pull/3, ack/2, abort/2, keep/2,
     push_all/2, pull_any/1, pull_any/2, delete/1,
     update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
@@ -43,6 +43,24 @@ pull(Name, Timeout) when is_atom(Name) ->
     case lmq_queue:pull(Pid, Timeout) of
         empty -> empty;
         Msg -> [{queue, Name} | lmq_lib:export_message(Msg)]
+    end.
+
+pull(Name, Timeout, Monitor) when is_binary(Name) ->
+    pull(binary_to_atom(Name, latin1), Timeout, Monitor);
+pull(Name, Timeout, Monitor) when is_atom(Name) ->
+    Pid = lmq_queue_mgr:get(Name, [create]),
+    Id = lmq_queue:pull_async(Pid, Timeout),
+    Wait = case Timeout of
+        infinity -> infinity;
+        0 -> infinity;
+        N -> round(N * 1000)
+    end,
+    receive
+        {Id, {error, timeout}} -> empty;
+        {Id, Msg} -> [{queue, Name} | lmq_lib:export_message(Msg)];
+        {'DOWN', _, process, Monitor, _} -> {error, down}
+    after Wait ->
+        empty
     end.
 
 ack(Name, UUID) ->
