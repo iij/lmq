@@ -29,9 +29,6 @@ start_link() ->
 pull(Pid, Regexp) ->
     gen_fsm:sync_send_event(Pid, {pull, Regexp, infinity}, infinity).
 
-pull(Pid, Regexp, 0) ->
-    gen_fsm:sync_send_event(Pid, {pull, Regexp, 0}, infinity);
-
 pull(Pid, Regexp, Timeout) ->
     gen_fsm:sync_send_event(Pid, {pull, Regexp, Timeout}, infinity).
 
