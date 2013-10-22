@@ -14,7 +14,7 @@
         [self(), Event, State])).
 -define(CLOSE_WAIT, 10).
 
--record(state, {from, regexp, timeout, mapping}).
+-record(state, {from, monitor, regexp, timeout, mapping}).
 
 %% ==================================================================
 %% Public API
@@ -49,18 +49,19 @@ idle(Event, State) ->
     ?UNEXPECTED(Event, idle),
     {next_state, idle, State}.
 
-idle({pull, Regexp, Timeout}, From, #state{}=S) ->
+idle({pull, Regexp, Timeout}, {Pid, _}=From, #state{}=S) ->
+    Monitor = erlang:monitor(process, Pid),
     case lmq_queue_mgr:match(Regexp) of
         {error, _}=R ->
-            {stop, error, R, S};
+            {stop, error, R, S#state{from=From, monitor=Monitor}};
         Queues ->
-            Mapping = lists:foldl(fun({_, Pid}=Q, Acc) ->
-                Id = lmq_queue:pull_async(Pid, Timeout),
+            Mapping = lists:foldl(fun({_, QPid}=Q, Acc) ->
+                Id = lmq_queue:pull_async(QPid, Timeout),
                 dict:store(Id, Q, Acc)
             end, dict:new(), Queues),
             gen_fsm:send_event_after(Timeout, cancel),
-            State = S#state{from=From, regexp=Regexp, timeout=Timeout,
-                            mapping=Mapping},
+            State = S#state{from=From, monitor=Monitor, regexp=Regexp,
+                            timeout=Timeout, mapping=Mapping},
             {next_state, waiting, State}
     end;
 
@@ -134,6 +135,10 @@ handle_info({Id, #message{id={_, UUID}}}, finalize, #state{}=S) ->
 handle_info({_Id, {error, _Reason}}, finalize, State) ->
     {next_state, finalize, State, ?CLOSE_WAIT};
 
+handle_info({'DOWN', Monitor, process, _, _}, _, #state{monitor=Monitor}=S) ->
+    cancel_pull(S#state.mapping),
+    {next_state, finalize, S, ?CLOSE_WAIT};
+
 handle_info(Event, StateName, State) ->
     ?UNEXPECTED(Event, StateName),
     {next_state, StateName, State}.
@@ -146,10 +151,12 @@ handle_sync_event(Event, _From, StateName, State) ->
     ?UNEXPECTED(Event, StateName),
     {reply, error, StateName, State}.
 
-terminate(normal, _StateName, _State) ->
+terminate(normal, _StateName, #state{monitor=Monitor}) ->
+    erlang:demonitor(Monitor, [flush]),
     ok;
 
-terminate(error, _StateName, _State) ->
+terminate(error, _StateName, #state{monitor=Monitor}) ->
+    erlang:demonitor(Monitor, [flush]),
     ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
