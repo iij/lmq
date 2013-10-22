@@ -59,7 +59,10 @@ idle({pull, Regexp, Timeout}, {Pid, _}=From, #state{}=S) ->
                 Id = lmq_queue:pull_async(QPid, Timeout),
                 dict:store(Id, Q, Acc)
             end, dict:new(), Queues),
-            gen_fsm:send_event_after(Timeout, cancel),
+            if is_number(Timeout), Timeout > 0 ->
+                gen_fsm:send_event_after(Timeout, cancel);
+                true -> ok
+            end,
             State = S#state{from=From, monitor=Monitor, regexp=Regexp,
                             timeout=Timeout, mapping=Mapping},
             {next_state, waiting, State}
@@ -87,7 +90,7 @@ waiting({maybe_pull, QName}, #state{}=S) ->
     end,
     {next_state, waiting, State};
 
-waiting(cancel, #state{timeout=T}=S) when T > 0 ->
+waiting(cancel, #state{}=S) ->
     waiting(timeout, S);
 
 waiting(timeout, #state{}=S) ->

@@ -32,7 +32,7 @@ pull(_Config) ->
     [lmq:push(Q, Q) || Q <- Queues],
 
     Pids = [Pid || {ok, Pid} <- [lmq_mpull:start() || _ <- lists:seq(1, 4)]],
-    [{queue, R1}, _, _, _] = lmq_mpull:pull(lists:nth(1, Pids), <<"mpull/.*">>, 0),
+    [{queue, R1}, _, _, _] = lmq_mpull:pull(lists:nth(1, Pids), <<"mpull/.*">>),
     [{queue, R2}, _, _, _] = lmq_mpull:pull(lists:nth(2, Pids), <<"mpull/.*">>, 0),
     true = lists:sort([R1, R2]) =:= Queues,
 
