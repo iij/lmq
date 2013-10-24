@@ -4,7 +4,7 @@
 -export([start/0, stop/0]).
 -export([push/2, pull/1, pull/2, pull/3, ack/2, abort/2, keep/2,
     push_all/2, pull_any/1, pull_any/2, pull_any/3, delete/1,
-    update_props/1, update_props/2,
+    get_props/1, update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
     status/0, queue_status/1, stats/0, stats/1]).
 
@@ -114,6 +114,11 @@ delete(Name) when is_binary(Name) ->
     delete(binary_to_atom(Name, latin1));
 delete(Name) when is_atom(Name) ->
     lmq_queue_mgr:delete(Name).
+
+get_props(Name) when is_binary(Name) ->
+    get_props(binary_to_atom(Name, latin1));
+get_props(Name) when is_atom(Name) ->
+    lmq_lib:get_properties(Name).
 
 update_props(Name) ->
     update_props(Name, []).
