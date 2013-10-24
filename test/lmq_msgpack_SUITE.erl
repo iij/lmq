@@ -59,6 +59,7 @@ props_and_timeout(Config) ->
     Name = ?config(qname, Config),
     Props = {[{<<"retry">>, 0}, {<<"timeout">>, 0}]},
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, update_props, [Name, Props]),
+    {error, _} = msgpack_rpc_client:call(Client, update_props, [Name, {[{<<"pack">>, <<"10">>}]}]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, <<"test">>]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]),
     {[{<<"queue">>, Name}, {<<"id">>, _UUID}, {<<"type">>, <<"normal">>}, {<<"content">>, <<"test">>}]} = Res,
@@ -112,11 +113,11 @@ pull_any(Config) ->
 
 default_props(Config) ->
     Client = ?config(client, Config),
-    %% Name = ?config(qname, Config),
     DefaultProps = [[<<"def/">>, {[{<<"retry">>, 0}, {<<"timeout">>, 0}]}],
                     [<<"lmq/">>, {[{<<"timeout">>, 0}]}]],
-    %% {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]).
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_default_props, [DefaultProps]),
+    {error, _} = msgpack_rpc_client:call(Client, set_default_props,
+        lists:nth(1, DefaultProps)),
     {ok, DefaultProps} = msgpack_rpc_client:call(Client, get_default_props, []),
     Name = <<"def/a">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),
