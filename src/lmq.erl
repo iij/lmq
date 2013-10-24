@@ -58,7 +58,13 @@ pull(Name, Timeout, Monitor) when is_atom(Name) ->
     receive
         {Id, {error, timeout}} -> empty;
         {Id, Msg} -> [{queue, Name} | lmq_lib:export_message(Msg)];
-        {'DOWN', _, process, Monitor, _} -> {error, down}
+        {'DOWN', _, process, Monitor, _} ->
+            lmq_queue:pull_cancel(Pid, Id),
+            receive
+                {Id, #message{id={_, UUID}}} -> lmq_queue:release(Pid, UUID)
+            after 0 -> ok
+            end,
+            {error, down}
     after Wait ->
         empty
     end.
@@ -93,7 +99,15 @@ pull_any(Regexp, Timeout, Monitor) when is_binary(Regexp) ->
     {ok, Ref} = lmq_mpull:pull_async(Pid, Regexp, Timeout),
     receive
         {Ref, Msg} -> Msg;
-        {'DOWN', _, process, Monitor, _} -> {error, down}
+        {'DOWN', _, process, Monitor, _} ->
+            lmq_mpull:pull_cancel(Pid),
+            receive
+                {Ref, [{queue, Name}, {id, UUID}, _, _]} ->
+                    Q = lmq_queue_mgr:get(Name, [create]),
+                    lmq_queue:release(Q, UUID)
+            after 0 -> ok
+            end,
+            {error, down}
     end.
 
 delete(Name) when is_binary(Name) ->
