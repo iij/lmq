@@ -47,7 +47,9 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
         is_number(Timeout) -> round(Timeout * 1000);
         true -> Timeout
     end,
-    case lmq:pull_any(Regexp, Timeout2) of
+    {monitors, [{process, Conn}]} = erlang:process_info(self(), monitors),
+    case lmq:pull_any(Regexp, Timeout2, Conn) of
+        {error, down} -> ok;
         empty -> <<"empty">>;
         Msg -> export_message(Msg)
     end.

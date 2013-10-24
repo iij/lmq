@@ -3,7 +3,7 @@
 -include("lmq.hrl").
 -export([start/0, stop/0]).
 -export([push/2, pull/1, pull/2, pull/3, ack/2, abort/2, keep/2,
-    push_all/2, pull_any/1, pull_any/2, delete/1,
+    push_all/2, pull_any/1, pull_any/2, pull_any/3, delete/1,
     update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
     status/0, queue_status/1, stats/0, stats/1]).
@@ -87,6 +87,14 @@ pull_any(Regexp) ->
 pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     {ok, Pid} = lmq_mpull:start(),
     lmq_mpull:pull(Pid, Regexp, Timeout).
+
+pull_any(Regexp, Timeout, Monitor) when is_binary(Regexp) ->
+    {ok, Pid} = lmq_mpull:start(),
+    {ok, Ref} = lmq_mpull:pull_async(Pid, Regexp, Timeout),
+    receive
+        {Ref, Msg} -> Msg;
+        {'DOWN', _, process, Monitor, _} -> {error, down}
+    end.
 
 delete(Name) when is_binary(Name) ->
     delete(binary_to_atom(Name, latin1));
