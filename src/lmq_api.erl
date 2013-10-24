@@ -3,7 +3,8 @@
 -export([delete/1, push/2, pull/1, pull/2, push_all/2,
     pull_any/1, pull_any/2, done/2, retain/2, release/2,
     update_props/1, update_props/2, set_default_props/1, get_default_props/0,
-    normalize_props/1, normalize_default_props/1]).
+    normalize_props/1, export_props/1,
+    normalize_default_props/1, export_default_props/1]).
 -include("lmq.hrl").
 
 delete(Name) when is_binary(Name) ->
@@ -102,8 +103,14 @@ normalize_props({Props}) ->
     %% jiffy style to proplists
     normalize_props(Props, []).
 
+export_props(Props) ->
+    export_props(Props, []).
+
 normalize_default_props(DefaultProps) ->
     normalize_default_props(DefaultProps, []).
+
+export_default_props(DefaultProps) ->
+    export_default_props(DefaultProps, []).
 
 %% ==================================================================
 %% Private functions
@@ -139,15 +146,10 @@ normalize_props([], Acc) ->
 normalize_props(_, _) ->
     {error, invalid}.
 
-export_props(Props) ->
-    export_props(Props, []).
-
 export_props([{pack, Duration} | T], Acc) ->
     export_props(T, [{<<"pack">>, Duration / 1000} | Acc]);
-
 export_props([{K, V} | T], Acc) ->
-    export_props(T, [{list_to_binary(atom_to_list(K)), V} | Acc]);
-
+    export_props(T, [{atom_to_binary(K, latin1), V} | Acc]);
 export_props([], Acc) ->
     {lists:reverse(Acc)}.
 
@@ -161,12 +163,8 @@ normalize_default_props([], Acc) ->
 normalize_default_props(_, _) ->
     {error, invalid}.
 
-export_default_props(DefaultProps) ->
-    export_default_props(DefaultProps, []).
-
 export_default_props([{Regexp, Props} | T], Acc) when is_list(Regexp); is_binary(Regexp) ->
     export_default_props(T, [[Regexp, export_props(Props)] | Acc]);
-
 export_default_props([], Acc) ->
     lists:reverse(Acc).
 
