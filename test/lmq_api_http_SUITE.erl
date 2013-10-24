@@ -4,14 +4,16 @@
 
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_ack_delete/1, accidentally_closed/1, keep_abort/1]).
+-export([push_pull_ack_delete/1, accidentally_closed/1, keep_abort/1,
+    queue_props/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8280/queues/" ++ Name).
+-define(URL_QUEUE_PROPS(Name), "http://localhost:8280/queues/" ++ Name ++ "/props").
 -define(URL_MESSAGE(Name, Id), "http://localhost:8280/messages/" ++ Name ++ "/" ++ Id).
 -define(CT_JSON, {"content-type", "application/json"}).
 
 all() ->
-    [push_pull_ack_delete, accidentally_closed, keep_abort].
+    [push_pull_ack_delete, accidentally_closed, keep_abort, queue_props].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -94,3 +96,13 @@ keep_abort(Config) ->
     {ok, "200", _, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
     {Msg2} = jsonx:decode(list_to_binary(ResBody2)),
     ContentBin = proplists:get_value(<<"content">>, Msg2).
+
+queue_props(Config) ->
+    Name = ?config(qname, Config),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], put,
+        <<"{\"pack\":30,\"retry\":0}">>),
+    {ok, "422", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], put,
+        <<"{\"foo\":\"30\"}">>),
+    {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr),
+    "{\"pack\":30,\"retry\":0,\"timeout\":30}" = ResBody.
