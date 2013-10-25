@@ -65,11 +65,12 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
         {ok, {Pid, _}} ->
             case proplists:get_value(update, Opts) of
                 true ->
-                    Base = lmq_lib:queue_info(Name),
-                    Props = proplists:get_value(props, Opts, []),
-                    Props1 = lmq_misc:extend(Props, Base),
+                    Props1 = case proplists:get_value(props, Opts, []) of
+                        [] -> [];
+                        Props -> lmq_misc:extend(Props, lmq_lib:queue_info(Name))
+                    end,
                     ok = lmq_queue:props(Pid, Props1),
-                    lager:info("Queue properties are updated: ~s ~p", [Name, Props]),
+                    lager:info("Queue properties are updated: ~s ~p", [Name, Props1]),
                     {reply, Pid, S};
                 undefined ->
                     {reply, Pid, S}
