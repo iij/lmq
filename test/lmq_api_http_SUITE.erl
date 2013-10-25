@@ -7,9 +7,11 @@
 -export([push_pull_ack_delete/1, accidentally_closed/1, keep_abort/1,
     queue_props/1]).
 
--define(URL_QUEUE(Name), "http://localhost:8280/queues/" ++ Name).
--define(URL_QUEUE_PROPS(Name), "http://localhost:8280/queues/" ++ Name ++ "/props").
--define(URL_MESSAGE(Name, Id), "http://localhost:8280/messages/" ++ Name ++ "/" ++ Id).
+-define(URL_QUEUE(Name), "http://localhost:8280/msgs/" ++ Name).
+-define(URL_QUEUE_PROPS(Name), "http://localhost:8280/props/" ++ Name).
+-define(URL_MESSAGE(Name, Id, Reply), "http://localhost:8280/msgs/" ++
+    Name ++ "/" ++ binary_to_list(Id) ++ "?reply=" ++ Reply).
+-define(URL_QUEUE2(Name), "http://localhost:8280/queues/" ++ Name).
 -define(CT_JSON, {"content-type", "application/json"}).
 
 all() ->
@@ -37,8 +39,7 @@ end_per_testcase(_, Config) ->
 push_pull_ack_delete(Config) ->
     Name = ?config(qname, Config),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
-        [{"content-type", "application/json"}],
-        post, "{\"message\":\"lmq test\"}"),
+        [?CT_JSON], post, "{\"message\":\"lmq test\"}"),
     "application/json" = proplists:get_value("content-type", ResHdr),
     "{\"packing\":\"no\"}" = ResBody,
 
@@ -51,8 +52,8 @@ push_pull_ack_delete(Config) ->
     <<"normal">> = proplists:get_value(<<"type">>, Msg),
     <<"{\"message\":\"lmq test\"}">> = proplists:get_value(<<"content">>, Msg),
 
-    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [], delete),
-    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [], delete),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
     not_found = lmq_queue_mgr:get(list_to_atom(Name)).
 
 accidentally_closed(Config) ->
@@ -83,14 +84,11 @@ keep_abort(Config) ->
     MsgId = proplists:get_value(<<"id">>, Msg),
     ContentBin = proplists:get_value(<<"content">>, Msg),
 
-    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [?CT_JSON],
-        post, "{\"action\":\"keep\"}"),
-    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [?CT_JSON],
-        post, "{\"action\":\"abort\"}"),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ext"), [], post),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
 
-    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [?CT_JSON],
-        post, "{\"action\":\"abort\"}"),
-    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId), [], delete),
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
 
     ct:timetrap(100),
     {ok, "200", _, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
