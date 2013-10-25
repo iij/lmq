@@ -21,18 +21,23 @@ rest_init(Req, [Type]) ->
 allowed_methods(Req, #state{type=undefined}=State) ->
     {[<<"GET">>, <<"POST">>, <<"DELETE">>], Req, State};
 allowed_methods(Req, #state{type=props}=State) ->
-    {[<<"GET">>, <<"PUT">>], Req, State}.
+    {[<<"GET">>, <<"PUT">>, <<"DELETE">>], Req, State}.
 
-resource_exists(Req, #state{method=Method, name=Name}=State) ->
+resource_exists(Req, #state{method=Method, name=Name, type=undefined}=State) ->
     case Method of
         <<"DELETE">> ->
             {lmq_queue_mgr:get(Name) =/= not_found, Req, State};
         _ ->
             {true, Req, State}
-    end.
+    end;
+resource_exists(Req, State) ->
+    {true, Req, State}.
 
-delete_resource(Req, #state{name=Name}=State) ->
+delete_resource(Req, #state{name=Name, type=undefined}=State) ->
     ok = lmq:delete(Name),
+    {true, Req, State};
+delete_resource(Req, #state{name=Name, type=props}=State) ->
+    lmq:update_props(Name),
     {true, Req, State}.
 
 content_types_provided(Req, State) ->

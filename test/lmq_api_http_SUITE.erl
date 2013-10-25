@@ -105,4 +105,10 @@ queue_props(Config) ->
         <<"{\"foo\":\"30\"}">>),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"pack\":30,\"retry\":0,\"timeout\":30}" = ResBody.
+    "{\"pack\":30,\"retry\":0,\"timeout\":30}" = ResBody,
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete),
+    {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr2),
+    "{\"pack\":0,\"retry\":2,\"timeout\":30}" = ResBody2.
+
