@@ -97,9 +97,12 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
 pull_any(Regexp, Timeout, Monitor) when is_binary(Regexp) ->
     {ok, Pid} = lmq_mpull:start(),
     {ok, Ref} = lmq_mpull:pull_async(Pid, Regexp, Timeout),
+    MonitorRef = erlang:monitor(process, Monitor),
     receive
-        {Ref, Msg} -> Msg;
-        {'DOWN', _, process, Monitor, _} ->
+        {Ref, Msg} ->
+            erlang:demonitor(MonitorRef, [flush]),
+            Msg;
+        {'DOWN', MonitorRef, process, Monitor, _} ->
             lmq_mpull:pull_cancel(Pid),
             receive
                 {Ref, [{queue, Name}, {id, UUID}, _, _]} ->
