@@ -12,12 +12,14 @@ init(_Transport, _Req, _Opts) ->
 rest_init(Req, []) ->
     {Name, Req2} = cowboy_req:binding(name, Req),
     {Method, Req3} = cowboy_req:method(Req2),
-    {ok, Req3, #state{method=Method,
-                      name=binary_to_atom(Name, latin1)}}.
+    {ok, Req3, #state{method=Method, name=Name}}.
 
 allowed_methods(Req, State) ->
     {[<<"GET">>, <<"PUT">>, <<"DELETE">>], Req, State}.
 
+delete_resource(Req, #state{name=undefined}=State) ->
+    lmq:set_default_props([]),
+    {true, Req, State};
 delete_resource(Req, #state{name=Name}=State) ->
     lmq:update_props(Name),
     {true, Req, State}.
@@ -30,15 +32,28 @@ content_types_accepted(Req, State) ->
     {[{{<<"application">>, <<"json">>, '*'}, update_props}
      ], Req, State}.
 
+to_json(Req, #state{name=undefined}=State) ->
+    {jsonx:encode(lmq_api:export_default_props(lmq:get_default_props())), Req, State};
 to_json(Req, #state{name=Name}=State) ->
     {jsonx:encode(lmq_api:export_props(lmq:get_props(Name))), Req, State}.
 
-update_props(Req, #state{name=Name}=State) ->
+update_props(Req, State) ->
     {ok, Content, Req2} = cowboy_req:body(Req),
-    case lmq_api:normalize_props(jsonx:decode(Content)) of
+    update_props(jsonx:decode(Content), Req2, State).
+
+update_props(Body, Req, #state{name=undefined}=State) ->
+    case lmq_api:normalize_default_props(Body) of
+        {ok, Props} ->
+            lmq:set_default_props(Props),
+            {true, Req, State};
+        {error, _} ->
+            {false, Req, State}
+    end;
+update_props(Body, Req, #state{name=Name}=State) ->
+    case lmq_api:normalize_props(Body) of
         {ok, Props} ->
             lmq:update_props(Name, Props),
-            {true, Req2, State};
+            {true, Req, State};
         {error, _} ->
-            {false, Req2, State}
+            {false, Req, State}
     end.

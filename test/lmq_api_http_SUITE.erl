@@ -5,7 +5,7 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
 -export([push_pull_ack_delete/1, accidentally_closed/1, keep_abort/1,
-    queue_props/1, multi/1]).
+    queue_props/1, default_props/1, multi/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8280/msgs/" ++ Name).
 -define(URL_MULTI(Regexp), "http://localhost:8280/msgs?qre=" ++ Regexp).
@@ -17,7 +17,7 @@
 
 all() ->
     [push_pull_ack_delete, accidentally_closed, keep_abort, queue_props,
-     multi].
+     default_props, multi].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -122,6 +122,23 @@ queue_props(Config) ->
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
     "{\"pack\":0,\"retry\":2,\"timeout\":30}" = ResBody2.
+
+default_props(Config) ->
+    Name = ?config(qname, Config),
+    PropList = "[[\"pack/.*\",{\"pack\":30}],[\".*\",{\"retry\":0}]]",
+    {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr),
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [?CT_JSON], put,
+        PropList),
+    {ok, "200", ResHdr2, PropList} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr2),
+
+    {ok, "200", _, "{\"pack\":0,\"retry\":0,\"timeout\":30}"} =
+        ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], delete),
+    {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get).
 
 multi(_Config) ->
     Names = ["multi%2fa", "multi%2fb"],

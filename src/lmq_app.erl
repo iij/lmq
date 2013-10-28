@@ -34,6 +34,7 @@ start_cowboy({Ip, Port}) ->
                {"/msgs/:name", lmq_cow_queue, [msg]},
                {"/msgs/:name/:id", lmq_cow_message, []},
                {"/queues/:name", lmq_cow_queue, [queue]},
+               {"/props", lmq_cow_prop, []},
                {"/props/:name", lmq_cow_prop, []}
               ]}
     ]),
