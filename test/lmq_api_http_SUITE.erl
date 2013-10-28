@@ -43,7 +43,7 @@ push_pull_ack_delete(Config) ->
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [?CT_JSON], post, "{\"message\":\"lmq test\"}"),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"packing\":\"no\"}" = ResBody,
+    "{\"packed\":\"no\"}" = ResBody,
 
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
@@ -66,7 +66,7 @@ accidentally_closed(Config) ->
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [?CT_JSON], post, "{\"testcase\":\"accidentally_closed\"}"),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"packing\":\"no\"}" = ResBody,
+    "{\"packed\":\"no\"}" = ResBody,
 
     ct:timetrap(100),
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
@@ -150,7 +150,7 @@ multi(_Config) ->
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp),
         [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"multi/a\":{\"packing\":\"no\"},\"multi/b\":{\"packing\":\"no\"}}" = ResBody,
+    "{\"multi/a\":{\"packed\":\"no\"},\"multi/b\":{\"packed\":\"no\"}}" = ResBody,
 
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),

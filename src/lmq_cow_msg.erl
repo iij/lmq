@@ -50,8 +50,8 @@ process_post(Req, #state{name=Name}=State) ->
     {true, cowboy_req:set_resp_body(Res2, Req2), State}.
 
 export_push_resp(ok) ->
-    {[{packing, no}]};
+    {[{packed, no}]};
 export_push_resp(packing_started) ->
-    {[{packing, created}]};
+    {[{packed, new}]};
 export_push_resp(packed) ->
-    {[{packing, appended}]}.
+    {[{packed, yes}]}.
