@@ -110,9 +110,9 @@ keep_abort(Config) ->
 
 queue_props(Config) ->
     Name = ?config(qname, Config),
-    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], put,
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
         <<"{\"pack\":30,\"retry\":0}">>),
-    {ok, "422", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], put,
+    {ok, "422", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
         <<"{\"foo\":\"30\"}">>),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),

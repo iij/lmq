@@ -14,8 +14,10 @@ rest_init(Req, []) ->
     {Method, Req3} = cowboy_req:method(Req2),
     {ok, Req3, #state{method=Method, name=Name}}.
 
+allowed_methods(Req, #state{name=undefined}=State) ->
+    {[<<"GET">>, <<"PUT">>, <<"DELETE">>], Req, State};
 allowed_methods(Req, State) ->
-    {[<<"GET">>, <<"PUT">>, <<"DELETE">>], Req, State}.
+    {[<<"GET">>, <<"PATCH">>, <<"DELETE">>], Req, State}.
 
 delete_resource(Req, #state{name=undefined}=State) ->
     lmq:set_default_props([]),
