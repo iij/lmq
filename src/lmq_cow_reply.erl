@@ -1,4 +1,4 @@
--module(lmq_cow_message).
+-module(lmq_cow_reply).
 
 -export([init/3, rest_init/2, malformed_request/2, allowed_methods/2,
     allow_missing_post/2, resource_exists/2, content_types_accepted/2]).

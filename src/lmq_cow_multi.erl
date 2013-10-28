@@ -75,19 +75,8 @@ process_post(Req, #state{qre=Regexp}=State) ->
     {ok, Content, Req2} = cowboy_req:body(Req),
     case lmq:push_all(Regexp, Content) of
         {ok, L} ->
-            Res = {[{N, export_push_response(R)} || {N, R} <- L]},
+            Res = {[{N, lmq_cow_msg:export_push_resp(R)} || {N, R} <- L]},
             Res2 = jsonx:encode(Res),
             {true, cowboy_req:set_resp_body(Res2, Req2), State};
         {error, _Reason} -> {false, Req2, State}
     end.
-
-%% ==================================================================
-%% private functions
-%% ==================================================================
-
-export_push_response(ok) ->
-    {[{packing, no}]};
-export_push_response(packing_started) ->
-    {[{packing, created}]};
-export_push_response(packed) ->
-    {[{packing, appended}]}.
