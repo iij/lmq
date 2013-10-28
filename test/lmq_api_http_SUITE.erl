@@ -77,7 +77,7 @@ accidentally_closed(Config) ->
     %% multi
     {error, req_timedout} = ibrowse:send_req(?URL_MULTI(Name), [], get, [],
         [{inactivity_timeout, 10}]),
-    {ok, "204", _, _} = ibrowse:send_req(?URL_MULTI(Name),
+    {ok, "200", _, _} = ibrowse:send_req(?URL_MULTI(Name),
         [?CT_JSON], post, "{\"testcase\":\"accidentally_closed2\"}"),
 
     ct:timetrap(100),
@@ -130,15 +130,18 @@ multi(_Config) ->
     [{ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete)
         || Name <- Names],
 
-    {ok, "204", _, _} = ibrowse:send_req(?URL_MULTI(Regexp),
+    {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp),
         [?CT_JSON], post, Content),
-    {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
+    "{\"multi/a\":{\"packing\":\"no\"},\"multi/b\":{\"packing\":\"no\"}}" = ResBody,
+
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
+    {ok, "200", ResHdr3, ResBody3} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr3),
 
-    {Msg} = jsonx:decode(list_to_binary(ResBody)),
-    {Msg2} = jsonx:decode(list_to_binary(ResBody2)),
+    {Msg} = jsonx:decode(list_to_binary(ResBody2)),
+    {Msg2} = jsonx:decode(list_to_binary(ResBody3)),
     Content = proplists:get_value(<<"content">>, Msg),
     Content = proplists:get_value(<<"content">>, Msg2),
     [<<"multi/a">>, <<"multi/b">>] = lists:sort([proplists:get_value(<<"queue">>, Msg),

@@ -36,7 +36,7 @@ pull(Name, Timeout) when is_binary(Name) ->
 push_all(Regexp, Content) when is_binary(Regexp) ->
     lager:info("lmq_api:push_all(~s, ...)", [Regexp]),
     case lmq:push_all(Regexp, Content) of
-        ok -> <<"ok">>;
+        {ok, _} -> <<"ok">>;
         {error, Reason} -> throw(Reason)
     end.
 

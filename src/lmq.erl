@@ -83,8 +83,7 @@ push_all(Regexp, Content) when is_binary(Regexp) ->
         {error, _}=R ->
             R;
         Queues ->
-            [lmq_queue:push(Pid, Content) || {_, Pid} <- Queues],
-            ok
+            {ok, [{Name, lmq_queue:push(Pid, Content)} || {Name, Pid} <- Queues]}
     end.
 
 pull_any(Regexp) ->
