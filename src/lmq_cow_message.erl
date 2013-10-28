@@ -31,14 +31,14 @@ resource_exists(Req, State) ->
 content_types_accepted(Req, State) ->
     {[{'*', process_post}], Req, State}.
 
-%% ==================================================================
-%% Private functions
-%% ==================================================================
-
 process_post(Req, #state{action=ok}=State) ->
     {true, Req, State};
 process_post(Req, State) ->
     {false, Req, State}.
+
+%% ==================================================================
+%% Private functions
+%% ==================================================================
 
 action(Req, #state{reply= <<"ack">>}=State) ->
     action(ack, Req, State);

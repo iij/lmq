@@ -4,7 +4,7 @@
 
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
--export([push_pull_ack_delete/1, accidentally_closed/1, keep_abort/1,
+-export([push_pull_ack_delete/1, accidentally_closed/1, nack_ext/1,
     queue_props/1, default_props/1, multi/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8280/msgs/" ++ Name).
@@ -16,7 +16,7 @@
 -define(CT_JSON, {"content-type", "application/json"}).
 
 all() ->
-    [push_pull_ack_delete, accidentally_closed, keep_abort, queue_props,
+    [push_pull_ack_delete, accidentally_closed, nack_ext, queue_props,
      default_props, multi].
 
 init_per_suite(Config) ->
@@ -85,9 +85,9 @@ accidentally_closed(Config) ->
     {Msg3} = jsonx:decode(list_to_binary(ResBody3)),
     <<"{\"testcase\":\"accidentally_closed2\"}">> = proplists:get_value(<<"content">>, Msg3).
 
-keep_abort(Config) ->
+nack_ext(Config) ->
     Name = ?config(qname, Config),
-    Content = "{\"testcase\":\"abort\"}",
+    Content = "{\"testcase\":\"nack_ext\"}",
     ContentBin = list_to_binary(Content),
 
     {ok, "200", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [?CT_JSON], post, Content),
