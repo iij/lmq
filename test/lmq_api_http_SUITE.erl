@@ -5,7 +5,7 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
 -export([push_pull_ack_delete/1, accidentally_closed/1, nack_ext/1,
-    queue_props/1, default_props/1, multi/1]).
+    queue_props/1, default_props/1, multi/1, error_case/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8180/msgs/" ++ Name).
 -define(URL_MULTI(Regexp), "http://localhost:8180/msgs?qre=" ++ Regexp).
@@ -17,7 +17,7 @@
 
 all() ->
     [push_pull_ack_delete, accidentally_closed, nack_ext, queue_props,
-     default_props, multi].
+     default_props, multi, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -163,3 +163,8 @@ multi(_Config) ->
     Content = proplists:get_value(<<"content">>, Msg2),
     [<<"multi/a">>, <<"multi/b">>] = lists:sort([proplists:get_value(<<"queue">>, Msg),
                                                  proplists:get_value(<<"queue">>, Msg2)]).
+
+error_case(Config) ->
+    Name = ?config(qname, Config),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete),
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, <<"foo">>, "ack"), [], post).

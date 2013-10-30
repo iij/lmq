@@ -175,10 +175,14 @@ process_message(Fun, Name, UUID) when is_atom(Fun), is_atom(Name) ->
         not_found ->
             {error, queue_not_found};
         Pid ->
-            MsgId = parse_uuid(UUID),
-            case lmq_queue:Fun(Pid, MsgId) of
-                ok -> ok;
-                not_found -> {error, not_found}
+            try parse_uuid(UUID) of
+                MsgId ->
+                    case lmq_queue:Fun(Pid, MsgId) of
+                        ok -> ok;
+                        not_found -> {error, not_found}
+                    end
+            catch error:function_clause ->
+                {error, not_found}
             end
     end.
 
