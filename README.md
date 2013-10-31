@@ -33,7 +33,34 @@ LMQ は Erlang で書かれたメッセージキューです。名前を付け�
 
 *Note: 0.2.0 以前のバージョンでは手動で DB を初期化する必要がありましたが、必要に応じて自動的に初期化するようになりました。*
 
-## キューのプロパティ
+メッセージの投入は HTTP 経由で行います。以下では重要でないヘッダは省略しています。
+
+    $ curl -i -XPOST localhost:8180/msgs/myqueue -H 'content-type: application/json' -d 'hello world!'
+    HTTP/1.1 200 OK
+    content-length: 15
+    content-type: application/json
+
+    {"packed":"no"}
+
+取り出してみましょう。
+
+    $ curl -i localhost:8180/msgs/myqueue
+    HTTP/1.1 200 OK
+    content-length: 104
+    content-type: application/json
+
+    {"queue":"myqueue","id":"f0eca12e-19f2-4922-bcc9-6e42bd585937","type":"normal","content":"hello world!"}
+
+LMQ はメッセージの再送処理のために、処理が完了したら ack を返すことになっています。
+
+    $ curl -i -XPOST 'localhost:8180/msgs/myqueue/f0eca12e-19f2-4922-bcc9-6e42bd585937?reply=ack'
+    HTTP/1.1 204 No Content
+
+`404 Not Found` が返ってきた場合は、既にメッセージがタイムアウトして再送待ちになっている可能性があります。メッセージを取り出すところからやり直してみてください。デフォルトでは、再送までの時間は30秒に設定されています。
+
+LMQ には他にも API が用意されています。詳細は [HTTP API](#http_api) を参照してください。
+
+## <a name="properties">キューのプロパティ</a>
 キューにはプロパティを設定することができ、その値により各キューの動作をカスタマイズすることができます。利用可能なプロパティと、デフォルト値は以下の通りです。
 
 name    | type    | default | description
@@ -114,6 +141,193 @@ API のアクセスログは `info` レベルで吐かれるので、lager の�
     ]}
   ]},
 ```
+
+## <a name="http_api">HTTP API</a>
+LMQ は HTTP インタフェースを 8180 番ポートで提供しています（ポートは変更可能）。URL に渡す値は全て URL エンコードしてください。
+
+リクエスト/レスポンスは JSON 形式です。
+
+### メッセージ操作
+#### GET /msgs/:name
+概要
+: メッセージをキューから1つ取得する。
+
+パラメータ
+: * name: キュー名
+
+レスポンス
+: `200 OK`
+```json
+{
+    "queue": "QUEUE NAME",
+    "id": "UUID",
+    "type": "MESSAGE TYPE",
+    "content": "CONTENT"
+}
+```
+* QUEUE NAME: メッセージを取り出したキュー名
+* UUID: メッセージの ID
+* MESSAGE TYPE: メッセージの種類 (`normal`/`package`)
+* CONTENT: POST されたデータ
+
+#### POST /msgs/:name
+概要
+: メッセージをキューに追加する。
+
+パラメータ
+: * name: キュー名
+
+リクエストボディ
+: メッセージの内容となるデータ
+
+レスポンス
+: `200 OK`
+```json
+{
+    "packed": "PACKED"
+}
+```
+* PACKED: キュー内でパッキングされたかどうか
+    * new: 新たにパッキングが開始された
+    * yes: 既存のメッセージとまとめられた
+    * no: メッセージはまとめられなかった
+
+#### GET /msgs?qre=:regexp
+概要
+: メッセージを regexp にマッチするキューの**いずれか**から1つ取得する。
+
+パラメータ
+: * qre: 対象のキューを絞り込む正規表現
+
+レスポンス
+: `GET /msgs/:name` と同様
+
+#### POST /msgs?qre=:regexp
+概要
+: メッセージを regexp にマッチする**全ての**キューに追加する。
+
+パラメータ
+: * qre: 対象のキューを絞り込む正規表現
+
+リクエストボディ
+: メッセージの内容となるデータ
+
+レスポンス
+: `200 OK`
+```json
+{
+    "QUEUE NAME 1": {"packed": "PACKED 1"},
+    "QUEUE NAME 2": {"packed": "PACKED 2"},
+    ...
+}
+```
+* QUEUE NAME N: メッセージを追加したキュー名
+* PACKED N: キュー内でのパッキングの状態 (`new`/`yes`/`no`)
+
+#### POST /msgs/:name/:msgid?reply=:type
+概要
+: 取得したメッセージの処理結果を通知する。
+
+パラメータ
+: * name: キュー名
+: * msgid: 対象メッセージの ID
+: * type: 処理結果のタイプ (`ack`/`nack`/`ext`)
+
+type の種類
+: * ack: 処理が正常に終了 -> メッセージをキューから削除
+: * nack: 処理が継続できなくなった -> メッセージをキューに戻す
+: * ext: 処理に時間がかかっている -> メッセージの処理可能時間を延長
+
+レスポンス
+: `204 No Content`
+
+### キュー操作
+#### DELETE /queues/:name
+概要
+: キューを削除する。キュー内のメッセージは全て破棄される。
+
+パラメータ
+: * name: キュー名
+
+レスポンス
+: `204 No Content`
+
+### プロパティ操作
+#### GET /props
+概要
+: デフォルトプロパティを取得する。
+
+レスポンス
+: `200 OK`
+```json
+[[REGEXP, PROPS], ...]
+```
+* REGEXP: 対象のキューを絞り込む正規表現
+* PROPS: REGEXP にマッチしたキューに設定するプロパティ
+
+#### PUT /props
+概要
+: デフォルトプロパティを設定する。既存の設定があれば上書きされる。
+
+リクエストボディ
+: `GET /props` のレスポンスと同様
+
+レスポンス
+: `204 No Content`
+
+#### DELETE /props
+概要
+: デフォルトプロパティを初期化する。
+
+レスポンス
+: `204 No Content`
+
+#### GET /props/:name
+概要
+: キューのプロパティを取得する。
+
+パラメータ
+: * name: キュー名
+
+レスポンス
+: `200 OK`
+```json
+{
+    "pack": PACK,
+    "retry": RETRY,
+    "timeout": TIMEOUT
+}
+```
+詳細は[キューのプロパティ](#properties)を参照
+
+#### PATCH /props/:name
+概要
+: キューのプロパティを部分的に更新する。指定しなかったプロパティは既存の値を踏襲する。
+
+パラメータ
+: * name: キュー名
+
+リクエストボディ
+: プロパティの内、変更したいものだけを記したもの
+
+例:
+```json
+{"pack": 30}
+{"pack": 30, "retry": 5}
+```
+
+レスポンス
+: `204 No Content`
+
+#### DELETE /props/:name
+概要
+: キューのプロパティを初期化する。
+
+パラメータ
+: * name: キュー名
+
+レスポンス
+: `204 No Content`
 
 ## MessagePack-RPC API
 

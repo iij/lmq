@@ -9,7 +9,7 @@
     status/0, queue_status/1, stats/0, stats/1]).
 
 -define(DEPS, [lager, crypto, quickrand, uuid, msgpack, msgpack_rpc,
-    mnesia, ranch, folsom, lmq]).
+    mnesia, ranch, cowlib, cowboy, jsonx, folsom, lmq]).
 
 %% ==================================================================
 %% Public API
@@ -83,8 +83,7 @@ push_all(Regexp, Content) when is_binary(Regexp) ->
         {error, _}=R ->
             R;
         Queues ->
-            [lmq_queue:push(Pid, Content) || {_, Pid} <- Queues],
-            ok
+            {ok, [{Name, lmq_queue:push(Pid, Content)} || {Name, Pid} <- Queues]}
     end.
 
 pull_any(Regexp) ->
@@ -97,9 +96,12 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
 pull_any(Regexp, Timeout, Monitor) when is_binary(Regexp) ->
     {ok, Pid} = lmq_mpull:start(),
     {ok, Ref} = lmq_mpull:pull_async(Pid, Regexp, Timeout),
+    MonitorRef = erlang:monitor(process, Monitor),
     receive
-        {Ref, Msg} -> Msg;
-        {'DOWN', _, process, Monitor, _} ->
+        {Ref, Msg} ->
+            erlang:demonitor(MonitorRef, [flush]),
+            Msg;
+        {'DOWN', MonitorRef, process, Monitor, _} ->
             lmq_mpull:pull_cancel(Pid),
             receive
                 {Ref, [{queue, Name}, {id, UUID}, _, _]} ->
@@ -173,10 +175,14 @@ process_message(Fun, Name, UUID) when is_atom(Fun), is_atom(Name) ->
         not_found ->
             {error, queue_not_found};
         Pid ->
-            MsgId = parse_uuid(UUID),
-            case lmq_queue:Fun(Pid, MsgId) of
-                ok -> ok;
-                not_found -> {error, not_found}
+            try parse_uuid(UUID) of
+                MsgId ->
+                    case lmq_queue:Fun(Pid, MsgId) of
+                        ok -> ok;
+                        not_found -> {error, not_found}
+                    end
+            catch error:function_clause ->
+                {error, not_found}
             end
     end.
 

@@ -7,15 +7,20 @@
                   kernel,
                   stdlib,
                   lager,
+                  crypto,
                   uuid,
                   mnesia,
                   ranch,
+                  cowlib,
+                  cowboy,
+                  jsonx,
                   msgpack,
                   msgpack_rpc,
                   folsom
                  ]},
   {mod, { lmq_app, []}},
   {env, [
-    {port, 18800}
+    {port, 18800},
+    {http, {"0.0.0.0", 8180}}
   ]}
  ]}.
