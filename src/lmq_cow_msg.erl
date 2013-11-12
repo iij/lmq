@@ -1,53 +1,55 @@
 -module(lmq_cow_msg).
 
--export([init/3, rest_init/2, allowed_methods/2,
-    content_types_provided/2, content_types_accepted/2]).
--export([to_json/2, process_post/2, export_push_resp/1]).
+-export([init/3, handle/2, info/3, terminate/3]).
+-export([export_push_resp/1]).
 
--record(state, {method, name}).
+-record(state, {name, ref}).
 
-init(_Transport, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_rest}.
-
-rest_init(Req, []) ->
+init(_Transport, Req, _Opts) ->
     {Name, Req2} = cowboy_req:binding(name, Req),
-    {ok, Req2, #state{name=binary_to_atom(Name, latin1)}}.
+    init(cowboy_req:method(Req2), #state{name=Name}).
 
-allowed_methods(Req, State) ->
-    {[<<"GET">>, <<"POST">>], Req, State}.
+init({<<"GET">>, Req}, #state{name=Name}=State) ->
+    Self = self(),
+    Ref = make_ref(),
+    spawn_link(fun() -> Self ! {Ref, lmq:pull(Name, infinity, Self)} end),
+    {loop, Req, State#state{ref=Ref}};
+init({<<"POST">>, Req}, State) ->
+    {ok, Req, State};
+init({_, Req}, State) ->
+    {ok, Req2} = cowboy_req:reply(405, Req),
+    {shutdown, Req2, State}.
 
-content_types_provided(Req, State) ->
-    {[{{<<"application">>, <<"json">>, '*'}, to_json}], Req, State}.
+handle(Req, #state{name=Name}=State) ->
+    {ok, Content, Req2} = cowboy_req:body(Req),
+    Res = export_push_resp(lmq:push(Name, Content)),
+    Res2 = jsonx:encode(Res),
+    {ok, Req3} = cowboy_req:reply(200,
+        [{<<"content-type">>, <<"application/json">>}], Res2, Req2),
+    {ok, Req3, State}.
 
-content_types_accepted(Req, State) ->
-    {[{{<<"application">>, <<"json">>, '*'}, process_post}], Req, State}.
+info({Ref, Msg}, Req, #state{name=Name, ref=Ref}=State) ->
+    {ok, Req2} = cowboy_req:reply(200,
+        [{<<"content-type">>, <<"application/octet-stream">>},
+         {<<"x-lmq-queue-name">>, Name},
+         {<<"x-lmq-message-id">>, proplists:get_value(id, Msg)},
+         {<<"x-lmq-message-type">>, atom_to_binary(
+            proplists:get_value(type, Msg), latin1)}
+        ], proplists:get_value(content, Msg), Req),
+    {ok, Req2, State};
+info(_Msg, Req, State) ->
+    {loop, Req, State}.
+
+terminate({normal, _}, _Req, _State) ->
+    %% maybe reuse connection
+    ok;
+terminate({error, _}, _Req, _State) ->
+    %% close connection and halt this process
+    error.
 
 %% ==================================================================
 %% Public functions
 %% ==================================================================
-
-to_json(Req, #state{name=Name}=State) ->
-    [Socket, Transport] = cowboy_req:get([socket, transport], Req),
-    Transport:setopts(Socket, [{active, once}]),
-    {_, Closed, Error} = Transport:messages(),
-
-    QPid = lmq_queue_mgr:get(Name, [create]),
-    Id = lmq_queue:pull_async(QPid),
-    receive
-        {Id, Msg} ->
-            Resp = [{queue, Name} | lmq_lib:export_message(Msg)],
-            {jsonx:encode(Resp), Req, State};
-        {Closed, Socket} ->
-            {halt, Req, State};
-        {Error, Socket, _Reason} ->
-            {halt, Req, State}
-    end.
-
-process_post(Req, #state{name=Name}=State) ->
-    {ok, Content, Req2} = cowboy_req:body(Req),
-    Res = export_push_resp(lmq:push(Name, Content)),
-    Res2 = jsonx:encode(Res),
-    {true, cowboy_req:set_resp_body(Res2, Req2), State}.
 
 export_push_resp(ok) ->
     {[{packed, no}]};

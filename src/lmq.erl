@@ -55,10 +55,11 @@ pull(Name, Timeout, Monitor) when is_atom(Name) ->
         0 -> infinity;
         N -> round(N * 1000)
     end,
-    receive
+    MonitorRef = erlang:monitor(process, Monitor),
+    R = receive
         {Id, {error, timeout}} -> empty;
         {Id, Msg} -> [{queue, Name} | lmq_lib:export_message(Msg)];
-        {'DOWN', _, process, Monitor, _} ->
+        {'DOWN', MonitorRef, process, Monitor, _} ->
             lmq_queue:pull_cancel(Pid, Id),
             receive
                 {Id, #message{id={_, UUID}}} -> lmq_queue:release(Pid, UUID)
@@ -67,7 +68,9 @@ pull(Name, Timeout, Monitor) when is_atom(Name) ->
             {error, down}
     after Wait ->
         empty
-    end.
+    end,
+    erlang:demonitor(MonitorRef, [flush]),
+    R.
 
 ack(Name, UUID) ->
     process_message(done, Name, UUID).

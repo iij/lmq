@@ -11,7 +11,7 @@
 -define(URL_MULTI(Regexp), "http://localhost:8180/msgs?qre=" ++ Regexp).
 -define(URL_QUEUE_PROPS(Name), "http://localhost:8180/props/" ++ Name).
 -define(URL_MESSAGE(Name, Id, Reply), "http://localhost:8180/msgs/" ++
-    Name ++ "/" ++ binary_to_list(Id) ++ "?reply=" ++ Reply).
+    Name ++ "/" ++ Id ++ "?reply=" ++ Reply).
 -define(URL_QUEUE2(Name), "http://localhost:8180/queues/" ++ Name).
 -define(CT_JSON, {"content-type", "application/json"}).
 
@@ -40,19 +40,18 @@ end_per_testcase(_, Config) ->
 
 push_pull_ack_delete(Config) ->
     Name = ?config(qname, Config),
+    Content = "{\"message\":\"lmq test\"}",
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
-        [?CT_JSON], post, "{\"message\":\"lmq test\"}"),
+        [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
     "{\"packed\":\"no\"}" = ResBody,
 
-    {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    "application/json" = proplists:get_value("content-type", ResHdr2),
-    {Msg} = jsonx:decode(list_to_binary(ResBody2)),
-    true = list_to_binary(Name) =:= proplists:get_value(<<"queue">>, Msg),
-    MsgId = proplists:get_value(<<"id">>, Msg),
-    true = is_binary(MsgId),
-    <<"normal">> = proplists:get_value(<<"type">>, Msg),
-    <<"{\"message\":\"lmq test\"}">> = proplists:get_value(<<"content">>, Msg),
+    {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
+    Name = proplists:get_value("x-lmq-queue-name", ResHdr2),
+    MsgId = proplists:get_value("x-lmq-message-id", ResHdr2),
+    "normal" = proplists:get_value("x-lmq-message-type", ResHdr2),
+    true = is_list(MsgId),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
@@ -60,19 +59,18 @@ push_pull_ack_delete(Config) ->
 
 accidentally_closed(Config) ->
     Name = ?config(qname, Config),
+    Content = "{\"testcase\":\"accidentally_closed\"}",
     {error, req_timedout} = ibrowse:send_req(?URL_QUEUE(Name), [], get, [],
         [{inactivity_timeout, 100}]),
 
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
-        [?CT_JSON], post, "{\"testcase\":\"accidentally_closed\"}"),
+        [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
     "{\"packed\":\"no\"}" = ResBody,
 
     ct:timetrap(100),
-    {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    "application/json" = proplists:get_value("content-type", ResHdr2),
-    {Msg} = jsonx:decode(list_to_binary(ResBody2)),
-    <<"{\"testcase\":\"accidentally_closed\"}">> = proplists:get_value(<<"content">>, Msg),
+    {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
 
     %% multi
     {error, req_timedout} = ibrowse:send_req(?URL_MULTI(Name), [], get, [],
@@ -88,14 +86,10 @@ accidentally_closed(Config) ->
 nack_ext(Config) ->
     Name = ?config(qname, Config),
     Content = "{\"testcase\":\"nack_ext\"}",
-    ContentBin = list_to_binary(Content),
 
     {ok, "200", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [?CT_JSON], post, Content),
-
-    {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    {Msg} = jsonx:decode(list_to_binary(ResBody)),
-    MsgId = proplists:get_value(<<"id">>, Msg),
-    ContentBin = proplists:get_value(<<"content">>, Msg),
+    {ok, "200", ResHdr, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ext"), [], post),
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
@@ -104,9 +98,7 @@ nack_ext(Config) ->
     {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
 
     ct:timetrap(100),
-    {ok, "200", _, ResBody2} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    {Msg2} = jsonx:decode(list_to_binary(ResBody2)),
-    ContentBin = proplists:get_value(<<"content">>, Msg2).
+    {ok, "200", _, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get).
 
 queue_props(Config) ->
     Name = ?config(qname, Config),
@@ -167,4 +159,4 @@ multi(_Config) ->
 error_case(Config) ->
     Name = ?config(qname, Config),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete),
-    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, <<"foo">>, "ack"), [], post).
+    {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, "foo", "ack"), [], post).
