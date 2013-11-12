@@ -73,15 +73,14 @@ accidentally_closed(Config) ->
     "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
 
     %% multi
+    Content2 = "{\"testcase\":\"accidentally_closed2\"}",
     {error, req_timedout} = ibrowse:send_req(?URL_MULTI(Name), [], get, [],
         [{inactivity_timeout, 10}]),
     {ok, "200", _, _} = ibrowse:send_req(?URL_MULTI(Name),
-        [?CT_JSON], post, "{\"testcase\":\"accidentally_closed2\"}"),
+        [?CT_JSON], post, Content2),
 
     ct:timetrap(100),
-    {ok, "200", _, ResBody3} = ibrowse:send_req(?URL_MULTI(Name), [], get),
-    {Msg3} = jsonx:decode(list_to_binary(ResBody3)),
-    <<"{\"testcase\":\"accidentally_closed2\"}">> = proplists:get_value(<<"content">>, Msg3).
+    {ok, "200", _, Content2} = ibrowse:send_req(?URL_MULTI(Name), [], get).
 
 nack_ext(Config) ->
     Name = ?config(qname, Config),
@@ -135,7 +134,7 @@ default_props(Config) ->
 multi(_Config) ->
     Names = ["multi%2fa", "multi%2fb"],
     Regexp = "multi%2f.*",
-    Content = <<"{\"testcase\":\"multi\"}">>,
+    Content = "{\"testcase\":\"multi\"}",
     [{ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete)
         || Name <- Names],
 
@@ -144,17 +143,21 @@ multi(_Config) ->
     "application/json" = proplists:get_value("content-type", ResHdr),
     "{\"multi/a\":{\"packed\":\"no\"},\"multi/b\":{\"packed\":\"no\"}}" = ResBody,
 
-    {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
-    "application/json" = proplists:get_value("content-type", ResHdr2),
-    {ok, "200", ResHdr3, ResBody3} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
-    "application/json" = proplists:get_value("content-type", ResHdr3),
+    {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
+    {ok, "200", ResHdr3, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
 
-    {Msg} = jsonx:decode(list_to_binary(ResBody2)),
-    {Msg2} = jsonx:decode(list_to_binary(ResBody3)),
-    Content = proplists:get_value(<<"content">>, Msg),
-    Content = proplists:get_value(<<"content">>, Msg2),
-    [<<"multi/a">>, <<"multi/b">>] = lists:sort([proplists:get_value(<<"queue">>, Msg),
-                                                 proplists:get_value(<<"queue">>, Msg2)]).
+    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
+    "application/octet-stream" = proplists:get_value("content-type", ResHdr3),
+    Name2 = proplists:get_value("x-lmq-queue-name", ResHdr2),
+    Name3 = proplists:get_value("x-lmq-queue-name", ResHdr3),
+    MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),
+    MsgId3 = proplists:get_value("x-lmq-message-id", ResHdr3),
+    "normal" = proplists:get_value("x-lmq-message-type", ResHdr2),
+    "normal" = proplists:get_value("x-lmq-message-type", ResHdr3),
+
+    ["multi/a", "multi/b"] = lists:sort([Name2, Name3]),
+    true = is_list(MsgId2),
+    true = is_list(MsgId3).
 
 error_case(Config) ->
     Name = ?config(qname, Config),
