@@ -181,7 +181,7 @@ process_message(Fun, Name, UUID) when is_atom(Fun), is_atom(Name) ->
                         ok -> ok;
                         not_found -> {error, not_found}
                     end
-            catch error:function_clause ->
+            catch exit:badarg ->
                 {error, not_found}
             end
     end.
