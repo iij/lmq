@@ -45,7 +45,7 @@ pull_async(_Config) ->
     lmq:push('mpull/a', 1),
     {ok, MP1} = lmq_mpull:start(),
     {ok, Ref1} = lmq_mpull:pull_async(MP1, <<"mpull/a">>),
-    receive {Ref1, [{queue, 'mpull/a'}, _, _, {content, 1}]} -> ok
+    receive {Ref1, [{queue, 'mpull/a'}, _, _, {content, {[], 1}}]} -> ok
     after 50 -> ct:fail(no_response)
     end,
 
@@ -56,7 +56,7 @@ pull_async(_Config) ->
     lmq:push('mpull/a', 3),
     {ok, MP3} = lmq_mpull:start(),
     {ok, Ref3} = lmq_mpull:pull_async(MP3, <<"mpull/a">>),
-    receive {Ref3, [{queue, 'mpull/a'}, _, _, {content, 3}]} -> ok
+    receive {Ref3, [{queue, 'mpull/a'}, _, _, {content, {[], 3}}]} -> ok
     after 50 -> ct:fail(no_response)
     end.
 
@@ -73,4 +73,4 @@ client_closed(_Config) ->
 
     lmq:push('mpull/a', 2),
     {ok, MP2} = lmq_mpull:start(),
-    [{queue, 'mpull/a'}, _, _, {content, 2}] = lmq_mpull:pull(MP2, <<"mpull/.*">>, 1000).
+    [{queue, 'mpull/a'}, _, _, {content, {[], 2}}] = lmq_mpull:pull(MP2, <<"mpull/.*">>, 1000).
