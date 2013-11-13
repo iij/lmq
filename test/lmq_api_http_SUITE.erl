@@ -41,19 +41,25 @@ end_per_testcase(_, Config) ->
 push_pull_ack_delete(Config) ->
     Name = ?config(qname, Config),
     Content = "{\"message\":\"lmq test\"}",
+    ResBody = "{\"packed\":\"no\"}",
+
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"packed\":\"no\"}" = ResBody,
 
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
+    "application/json" = proplists:get_value("content-type", ResHdr2),
     Name = proplists:get_value("x-lmq-queue-name", ResHdr2),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr2),
     "normal" = proplists:get_value("x-lmq-message-type", ResHdr2),
     true = is_list(MsgId),
-
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
+
+    %% implicit content-type
+    {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name), [], post, Content),
+    {ok, "200", ResHdr3, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
+    "application/octet-stream" = proplists:get_value("content-type", ResHdr3),
+
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
     not_found = lmq_queue_mgr:get(list_to_atom(Name)).
 
@@ -70,7 +76,7 @@ accidentally_closed(Config) ->
 
     ct:timetrap(100),
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
-    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
+    "application/json" = proplists:get_value("content-type", ResHdr2),
 
     %% multi
     Content2 = "{\"testcase\":\"accidentally_closed2\"}",
@@ -146,8 +152,8 @@ multi(_Config) ->
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
     {ok, "200", ResHdr3, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
 
-    "application/octet-stream" = proplists:get_value("content-type", ResHdr2),
-    "application/octet-stream" = proplists:get_value("content-type", ResHdr3),
+    "application/json" = proplists:get_value("content-type", ResHdr2),
+    "application/json" = proplists:get_value("content-type", ResHdr3),
     Name2 = proplists:get_value("x-lmq-queue-name", ResHdr2),
     Name3 = proplists:get_value("x-lmq-queue-name", ResHdr3),
     MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),

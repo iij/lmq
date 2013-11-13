@@ -29,21 +29,27 @@ init({_, Req}, State) ->
 
 handle(Req, #state{queue=Queue, push=Push}=State) ->
     {ok, Content, Req2} = cowboy_req:body(Req),
-    Res = export_push_resp(lmq:Push(Queue, Content)),
+    {CT, Req3} = cowboy_req:header(<<"content-type">>, Req2),
+    Res = export_push_resp(case CT of
+        undefined -> lmq:Push(Queue, Content);
+        _ -> lmq:Push(Queue, [{<<"content-type">>, CT}], Content)
+    end),
     Res2 = jsonx:encode(Res),
-    {ok, Req3} = cowboy_req:reply(200,
-        [{<<"content-type">>, <<"application/json">>}], Res2, Req2),
-    {ok, Req3, State}.
+    {ok, Req4} = cowboy_req:reply(200,
+        [{<<"content-type">>, <<"application/json">>}], Res2, Req3),
+    {ok, Req4, State}.
 
 info({Ref, Msg}, Req, #state{ref=Ref}=State) ->
+    {MD, V} = proplists:get_value(content, Msg),
+    CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
     {ok, Req2} = cowboy_req:reply(200,
-        [{<<"content-type">>, <<"application/octet-stream">>},
+        [{<<"content-type">>, CT},
          {<<"x-lmq-queue-name">>, atom_to_binary(
             proplists:get_value(queue, Msg), latin1)},
          {<<"x-lmq-message-id">>, proplists:get_value(id, Msg)},
          {<<"x-lmq-message-type">>, atom_to_binary(
             proplists:get_value(type, Msg), latin1)}
-        ], proplists:get_value(content, Msg), Req),
+        ], V, Req),
     {ok, Req2, State};
 info(_Msg, Req, State) ->
     {loop, Req, State}.

@@ -22,7 +22,7 @@ push(Name, Content) when is_binary(Name) ->
 pull(Name) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s)", [Name]),
     Response = lmq:pull(Name),
-    export_message(Response).
+    export_message(extract_content_value(Response)).
 
 pull(Name, Timeout) when is_binary(Name) ->
     lager:info("lmq_api:pull(~s, ~p)", [Name, Timeout]),
@@ -30,7 +30,7 @@ pull(Name, Timeout) when is_binary(Name) ->
     case lmq:pull(Name, Timeout, Conn) of
         {error, down} -> ok;
         empty -> <<"empty">>;
-        Msg -> export_message(Msg)
+        Msg -> export_message(extract_content_value(Msg))
     end.
 
 push_all(Regexp, Content) when is_binary(Regexp) ->
@@ -53,7 +53,7 @@ pull_any(Regexp, Timeout) when is_binary(Regexp) ->
     case lmq:pull_any(Regexp, Timeout2, Conn) of
         {error, down} -> ok;
         empty -> <<"empty">>;
-        Msg -> export_message(Msg)
+        Msg -> export_message(extract_content_value(Msg))
     end.
 
 done(Name, UUID) when is_binary(Name), is_binary(UUID) ->
@@ -167,6 +167,11 @@ export_default_props([{Regexp, Props} | T], Acc) when is_list(Regexp); is_binary
     export_default_props(T, [[Regexp, export_props(Props)] | Acc]);
 export_default_props([], Acc) ->
     lists:reverse(Acc).
+
+extract_content_value([QUEUE, ID, {type, normal}=TYPE, {content, {_, V}}]) ->
+    [QUEUE, ID, TYPE, {content, V}];
+extract_content_value([QUEUE, ID, {type, package}=TYPE, {content, Content}]) ->
+    [QUEUE, ID, TYPE, {content, [V || {_, V} <- Content]}].
 
 %% ==================================================================
 %% EUnit test

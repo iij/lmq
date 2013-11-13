@@ -2,8 +2,8 @@
 
 -include("lmq.hrl").
 -export([start/0, stop/0]).
--export([push/2, pull/1, pull/2, pull/3, ack/2, abort/2, keep/2,
-    push_all/2, pull_any/1, pull_any/2, pull_any/3, delete/1,
+-export([push/2, push/3, pull/1, pull/2, pull/3, ack/2, abort/2, keep/2,
+    push_all/2, push_all/3, pull_any/1, pull_any/2, pull_any/3, delete/1,
     get_props/1, update_props/1, update_props/2,
     set_default_props/1, get_default_props/0,
     status/0, queue_status/1, stats/0, stats/1]).
@@ -23,11 +23,14 @@ stop() ->
     [application:stop(Dep) || Dep <- lists:reverse(?DEPS)],
     ok.
 
-push(Name, Content) when is_binary(Name) ->
-    push(binary_to_atom(Name, latin1), Content);
-push(Name, Content) when is_atom(Name) ->
+push(Name, Content) ->
+    push(Name, [], Content).
+
+push(Name, MD, Content) when is_binary(Name) ->
+    push(binary_to_atom(Name, latin1), MD, Content);
+push(Name, MD, Content) when is_atom(Name) ->
     Pid = lmq_queue_mgr:get(Name, [create]),
-    lmq_queue:push(Pid, Content).
+    lmq_queue:push(Pid, {MD, Content}).
 
 pull(Name) when is_binary(Name) ->
     pull(binary_to_atom(Name, latin1));
@@ -81,12 +84,15 @@ abort(Name, UUID) ->
 keep(Name, UUID) ->
     process_message(retain, Name, UUID).
 
-push_all(Regexp, Content) when is_binary(Regexp) ->
+push_all(Regexp, Content) ->
+    push_all(Regexp, [], Content).
+
+push_all(Regexp, MD, Content) when is_binary(Regexp) ->
     case lmq_queue_mgr:match(Regexp) of
         {error, _}=R ->
             R;
         Queues ->
-            {ok, [{Name, lmq_queue:push(Pid, Content)} || {Name, Pid} <- Queues]}
+            {ok, [{Name, lmq_queue:push(Pid, {MD, Content})} || {Name, Pid} <- Queues]}
     end.
 
 pull_any(Regexp) ->
