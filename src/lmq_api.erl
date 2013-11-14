@@ -14,7 +14,9 @@ delete(Name) when is_binary(Name) ->
 
 push(Name, Content) when is_binary(Name) ->
     lager:info("lmq_api:push(~s, ...)", [Name]),
-    case lmq:push(Name, Content) of
+    Bin = msgpack:pack(Content),
+    case lmq:push(Name, [{<<"content-type">>,
+                          <<"application/x-msgpack">>}], Bin) of
         packing_started -> <<"packing started">>;
         Other -> list_to_binary(atom_to_list(Other))
     end.
@@ -168,10 +170,19 @@ export_default_props([{Regexp, Props} | T], Acc) when is_list(Regexp); is_binary
 export_default_props([], Acc) ->
     lists:reverse(Acc).
 
-extract_content_value([QUEUE, ID, {type, normal}=TYPE, {content, {_, V}}]) ->
-    [QUEUE, ID, TYPE, {content, V}];
+extract_content_value([QUEUE, ID, {type, normal}=TYPE, {content, {MD, V}}]) ->
+    [QUEUE, ID, TYPE, {content, maybe_decode(MD, V)}];
 extract_content_value([QUEUE, ID, {type, package}=TYPE, {content, Content}]) ->
-    [QUEUE, ID, TYPE, {content, [V || {_, V} <- Content]}].
+    [QUEUE, ID, TYPE, {content, [maybe_decode(MD, V) || {MD, V} <- Content]}].
+
+maybe_decode(MD, V) ->
+    case proplists:get_value(<<"content-type">>, MD) of
+        <<"application/x-msgpack">> ->
+            {ok, Term} = msgpack:unpack(V),
+            Term;
+        _ ->
+            V
+    end.
 
 %% ==================================================================
 %% EUnit test
