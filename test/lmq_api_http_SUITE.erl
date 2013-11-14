@@ -60,6 +60,13 @@ push_pull_ack_delete(Config) ->
     {ok, "200", ResHdr3, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
     "application/octet-stream" = proplists:get_value("content-type", ResHdr3),
 
+    %% timeout
+    {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name), [], post, Content),
+    {ok, "200", _, Content} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?timeout=0", [], get),
+    {ok, "204", _, _} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?timeout=0", [], get),
+
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
     not_found = lmq_queue_mgr:get(list_to_atom(Name)).
 
@@ -141,13 +148,14 @@ multi(_Config) ->
     Names = ["multi%2fa", "multi%2fb"],
     Regexp = "multi%2f.*",
     Content = "{\"testcase\":\"multi\"}",
+    ResBody = "{\"multi/a\":{\"packed\":\"no\"},\"multi/b\":{\"packed\":\"no\"}}",
+
     [{ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete)
         || Name <- Names],
 
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp),
         [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"multi/a\":{\"packed\":\"no\"},\"multi/b\":{\"packed\":\"no\"}}" = ResBody,
 
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
     {ok, "200", ResHdr3, Content} = ibrowse:send_req(?URL_MULTI(Regexp), [], get),
@@ -163,7 +171,17 @@ multi(_Config) ->
 
     ["multi/a", "multi/b"] = lists:sort([Name2, Name3]),
     true = is_list(MsgId2),
-    true = is_list(MsgId3).
+    true = is_list(MsgId3),
+
+    %% timeout
+    {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp),
+        [?CT_JSON], post, Content),
+    {ok, "200", _, Content} = ibrowse:send_req(
+        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get),
+    {ok, "200", _, Content} = ibrowse:send_req(
+        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get),
+    {ok, "204", _, _} = ibrowse:send_req(
+        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get).
 
 error_case(Config) ->
     Name = ?config(qname, Config),

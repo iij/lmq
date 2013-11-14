@@ -17,10 +17,16 @@ init(_Transport, Req, [multi]) ->
     end.
 
 init({<<"GET">>, Req}, #state{queue=Queue, pull=Pull}=State) ->
-    Self = self(),
-    Ref = make_ref(),
-    spawn_link(fun() -> Self ! {Ref, lmq:Pull(Queue, infinity, Self)} end),
-    {loop, Req, State#state{ref=Ref}};
+    case validate_timeout(Req) of
+        {ok, Timeout, Req2} ->
+            Self = self(),
+            Ref = make_ref(),
+            spawn_link(fun() -> Self ! {Ref, lmq:Pull(Queue, Timeout, Self)} end),
+            {loop, Req2, State#state{ref=Ref}};
+        {error, Req2} ->
+            {ok, Req3} = cowboy_req:reply(400, Req2),
+            {shutdown, Req3, State}
+    end;
 init({<<"POST">>, Req}, State) ->
     {ok, Req, State};
 init({_, Req}, State) ->
@@ -39,6 +45,9 @@ handle(Req, #state{queue=Queue, push=Push}=State) ->
         [{<<"content-type">>, <<"application/json">>}], Res2, Req3),
     {ok, Req4, State}.
 
+info({Ref, empty}, Req, #state{ref=Ref}=State) ->
+    {ok, Req2} = cowboy_req:reply(204, Req),
+    {ok, Req2, State};
 info({Ref, Msg}, Req, #state{ref=Ref}=State) ->
     {MD, V} = proplists:get_value(content, Msg),
     CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
@@ -81,5 +90,17 @@ validate_multi_request(Req) ->
             case re:compile(Regexp) of
                 {ok, _} -> {{ok, Regexp}, Req2};
                 _ -> {error, Req2}
+            end
+    end.
+
+validate_timeout(Req) ->
+    case cowboy_req:qs_val(<<"timeout">>, Req) of
+        {undefined, Req2} ->
+            {ok, infinity, Req2};
+        {V, Req2} ->
+            case lmq_misc:btof(V) of
+                {ok, 0.0} -> {ok, 0, Req2};
+                {ok, T} -> {ok, T, Req2};
+                {error, _} -> {error, Req2}
             end
     end.
