@@ -93,7 +93,7 @@ validate_multi_request(Req) ->
     end.
 
 validate_timeout(Req) ->
-    case cowboy_req:qs_val(<<"timeout">>, Req) of
+    case cowboy_req:qs_val(<<"t">>, Req) of
         {undefined, Req2} ->
             {ok, infinity, Req2};
         {V, Req2} ->

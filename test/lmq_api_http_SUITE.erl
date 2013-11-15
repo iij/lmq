@@ -64,9 +64,9 @@ push_pull_ack_delete(Config) ->
     %% timeout
     {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name), [], post, Content),
     {ok, "200", _, Content} = ibrowse:send_req(
-        ?URL_QUEUE(Name) ++ "?timeout=0", [], get),
+        ?URL_QUEUE(Name) ++ "?t=0", [], get),
     {ok, "204", _, _} = ibrowse:send_req(
-        ?URL_QUEUE(Name) ++ "?timeout=0", [], get),
+        ?URL_QUEUE(Name) ++ "?t=0", [], get),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
     not_found = lmq_queue_mgr:get(list_to_atom(Name)).
@@ -178,11 +178,11 @@ multi(_Config) ->
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_MULTI(Regexp),
         [?CT_JSON], post, Content),
     {ok, "200", _, Content} = ibrowse:send_req(
-        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get),
+        ?URL_MULTI(Regexp) ++ "&t=0", [], get),
     {ok, "200", _, Content} = ibrowse:send_req(
-        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get),
+        ?URL_MULTI(Regexp) ++ "&t=0", [], get),
     {ok, "204", _, _} = ibrowse:send_req(
-        ?URL_MULTI(Regexp) ++ "&timeout=0", [], get).
+        ?URL_MULTI(Regexp) ++ "&t=0", [], get).
 
 compound(Config) ->
     Name = ?config(qname, Config),
@@ -196,7 +196,7 @@ compound(Config) ->
         ?URL_QUEUE(Name), [?CT_JSON], post, "{\"testcase\":\"compound 2\"}"),
 
     {ok, "200", ResHdr, Body} = ibrowse:send_req(
-        ?URL_QUEUE(Name) ++ "?timeout=0.3", [], get, [], [{response_format, binary}]),
+        ?URL_QUEUE(Name) ++ "?t=0.3", [], get, [], [{response_format, binary}]),
     Name = proplists:get_value("x-lmq-queue-name", ResHdr),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
     "package" = proplists:get_value("x-lmq-message-type", ResHdr),
