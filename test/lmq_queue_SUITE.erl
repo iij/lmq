@@ -80,6 +80,8 @@ release(Config) ->
     M1 = lmq_queue:pull(Pid),
     Ref = M1#message.content,
     {_, UUID1} = M1#message.id,
+    2 = M1#message.retry,
+
     ok = lmq_queue:release(Pid, UUID1),
     not_found = lmq_queue:release(Pid, UUID1),
     not_found = lmq_queue:done(Pid, UUID1),
@@ -87,7 +89,15 @@ release(Config) ->
     Ref = M2#message.content,
     {_, UUID2} = M2#message.id,
     true = UUID1 =/= UUID2,
-    ok = lmq_queue:done(Pid, UUID2).
+    1 = M2#message.retry,
+
+    ok = lmq_queue:put_back(Pid, UUID2),
+    not_found = lmq_queue:put_back(Pid, UUID2),
+    M3 = lmq_queue:pull(Pid),
+    Ref = M3#message.content,
+    {_, UUID3} = M3#message.id,
+    1 = M2#message.retry,
+    ok = lmq_queue:done(Pid, UUID3).
 
 release_multi(Config) ->
     Pid = ?config(queue, Config),

@@ -95,7 +95,11 @@ release(Config) ->
     {_, UUID} = M#message.id,
     ok = lmq_lib:release(Name, UUID),
     not_found = lmq_lib:release(Name, UUID),
-    2 = (lmq_lib:dequeue(Name, 30))#message.retry,
+
+    M1 = lmq_lib:dequeue(Name, 30),
+    1 = M1#message.retry,
+    ok = lmq_lib:put_back(Name, element(2, M1#message.id)),
+    1 = (lmq_lib:dequeue(Name, 30))#message.retry,
 
     ok = lmq_lib:enqueue(Name, make_ref()),
     M2 = lmq_lib:dequeue(Name, 30),

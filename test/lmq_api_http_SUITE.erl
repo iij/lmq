@@ -99,6 +99,8 @@ accidentally_closed(Config) ->
 nack_ext(Config) ->
     Name = ?config(qname, Config),
     Content = "{\"testcase\":\"nack_ext\"}",
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
+        <<"{\"retry\":1}">>),
 
     {ok, "200", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [?CT_JSON], post, Content),
     {ok, "200", ResHdr, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
@@ -107,11 +109,14 @@ nack_ext(Config) ->
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ext"), [], post),
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
 
+    %% id is changed
     {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
     {ok, "404", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
 
-    ct:timetrap(100),
-    {ok, "200", _, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get).
+    {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name) ++ "?t=0", [], get),
+    MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId2, "nack"), [], post),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE(Name) ++ "?t=0", [], get).
 
 queue_props(Config) ->
     Name = ?config(qname, Config),

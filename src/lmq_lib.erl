@@ -6,7 +6,7 @@
     get_lmq_info/1, get_lmq_info/2, set_lmq_info/2,
     queue_info/1, update_queue_props/2, all_queue_names/0, create/1,
     create/2, delete/1, enqueue/2, enqueue/3, dequeue/2, done/2, retain/3,
-    release/2, first/1, rfind/2, waittime/1, export_message/1,
+    release/2, put_back/2, first/1, rfind/2, waittime/1, export_message/1,
     get_properties/1, get_properties/2]).
 
 init_mnesia() ->
@@ -210,6 +210,12 @@ done(Name, UUID) ->
     transaction(F).
 
 release(Name, UUID) ->
+    put_back(Name, UUID, consume).
+
+put_back(Name, UUID) ->
+    put_back(Name, UUID, keep).
+
+put_back(Name, UUID, Retry) ->
     Now = lmq_misc:unixtime(),
     F = fun() ->
         case rfind(Name, UUID) of
@@ -218,7 +224,11 @@ release(Name, UUID) ->
             #message{id={TS, UUID}} when TS < Now ->
                 not_found;
             #message{state=processing, retry=R}=M ->
-                M1 = M#message{id={Now, UUID}, state=available, retry=increment(R)},
+                M1 = if Retry =:= consume ->
+                    M#message{id={Now, UUID}, state=available, retry=R};
+                true ->
+                    M#message{id={Now, UUID}, state=available, retry=increment(R)}
+                end,
                 mnesia:write(Name, M1, write),
                 mnesia:delete(Name, M#message.id, write);
             _ ->

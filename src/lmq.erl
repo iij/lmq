@@ -65,7 +65,7 @@ pull(Name, Timeout, Monitor) when is_atom(Name) ->
         {'DOWN', MonitorRef, process, Monitor, _} ->
             lmq_queue:pull_cancel(Pid, Id),
             receive
-                {Id, #message{id={_, UUID}}} -> lmq_queue:release(Pid, UUID)
+                {Id, #message{id={_, UUID}}} -> lmq_queue:put_back(Pid, UUID)
             after 0 -> ok
             end,
             {error, down}
@@ -115,7 +115,7 @@ pull_any(Regexp, Timeout, Monitor) when is_binary(Regexp) ->
             receive
                 {Ref, [{queue, Name}, {id, UUID}, _, _]} ->
                     Q = lmq_queue_mgr:get(Name, [create]),
-                    lmq_queue:release(Q, UUID)
+                    lmq_queue:put_back(Q, UUID)
             after 0 -> ok
             end,
             {error, down}

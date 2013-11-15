@@ -152,7 +152,7 @@ handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
 
 handle_info({Id, #message{id={_, UUID}}}, finalize, #state{}=S) ->
     {_, Pid} = dict:fetch(Id, S#state.mapping),
-    lmq_queue:release(Pid, UUID),
+    lmq_queue:put_back(Pid, UUID),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 handle_info({_Id, {error, _Reason}}, finalize, State) ->
