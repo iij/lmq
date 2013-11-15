@@ -49,8 +49,7 @@ info({Ref, empty}, Req, #state{ref=Ref}=State) ->
     {ok, Req2} = cowboy_req:reply(204, Req),
     {ok, Req2, State};
 info({Ref, Msg}, Req, #state{ref=Ref}=State) ->
-    {MD, V} = proplists:get_value(content, Msg),
-    CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
+    {CT, V} = encode_body(proplists:get_value(type, Msg), Msg),
     {ok, Req2} = cowboy_req:reply(200,
         [{<<"content-type">>, CT},
          {<<"x-lmq-queue-name">>, atom_to_binary(
@@ -104,3 +103,24 @@ validate_timeout(Req) ->
                 {error, _} -> {error, Req2}
             end
     end.
+
+encode_body(normal, Msg) ->
+    {MD, V} = proplists:get_value(content, Msg),
+    CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
+    {CT, V};
+encode_body(package, Msg) ->
+    Boundary = proplists:get_value(id, Msg),
+    V = to_multipart(Boundary, proplists:get_value(content, Msg)),
+    {<<"multipart/mixed; boundary=", Boundary/binary>>, V}.
+
+to_multipart(Boundary, Contents) when is_list(Contents) ->
+    [[[<<"\r\n--">>, Boundary, <<"\r\n">>, encode_multipart_item(C)]
+       || C <- Contents],
+     <<"\r\n--">>, Boundary, <<"--\r\n">>].
+
+encode_multipart_item({MD, V}) ->
+    [<<"Content-Type: ">>,
+     proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
+     <<"\r\n">>,
+     <<"Content-Transfer-Encoding: binary\r\n">>,
+     <<"\r\n">>, V].

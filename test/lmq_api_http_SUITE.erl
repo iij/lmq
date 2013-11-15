@@ -5,7 +5,7 @@
 -export([init_per_suite/1, end_per_suite/1,
     init_per_testcase/2, end_per_testcase/2, all/0]).
 -export([push_pull_ack_delete/1, accidentally_closed/1, nack_ext/1,
-    queue_props/1, default_props/1, multi/1, error_case/1]).
+    queue_props/1, default_props/1, multi/1, compound/1, error_case/1]).
 
 -define(URL_QUEUE(Name), "http://localhost:8180/msgs/" ++ Name).
 -define(URL_MULTI(Regexp), "http://localhost:8180/msgs?qre=" ++ Regexp).
@@ -14,10 +14,11 @@
     Name ++ "/" ++ Id ++ "?reply=" ++ Reply).
 -define(URL_QUEUE2(Name), "http://localhost:8180/queues/" ++ Name).
 -define(CT_JSON, {"content-type", "application/json"}).
+-define(CTE, {<<"content-transfer-encoding">>,<<"binary">>}).
 
 all() ->
     [push_pull_ack_delete, accidentally_closed, nack_ext, queue_props,
-     default_props, multi, error_case].
+     default_props, multi, compound, error_case].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -182,6 +183,34 @@ multi(_Config) ->
         ?URL_MULTI(Regexp) ++ "&timeout=0", [], get),
     {ok, "204", _, _} = ibrowse:send_req(
         ?URL_MULTI(Regexp) ++ "&timeout=0", [], get).
+
+compound(Config) ->
+    Name = ?config(qname, Config),
+    C1 = msgpack:pack({[{"testcase", "compound 1"}]}),
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name),
+        [?CT_JSON], patch, <<"{\"pack\":0.3,\"retry\":0}">>),
+
+    {ok, "200", _, "{\"packed\":\"new\"}"} = ibrowse:send_req(
+        ?URL_QUEUE(Name), [{"content-type", "application/x-msgpack"}], post, C1),
+    {ok, "200", _, "{\"packed\":\"yes\"}"} = ibrowse:send_req(
+        ?URL_QUEUE(Name), [?CT_JSON], post, "{\"testcase\":\"compound 2\"}"),
+
+    {ok, "200", ResHdr, Body} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?timeout=0.3", [], get, [], [{response_format, binary}]),
+    Name = proplists:get_value("x-lmq-queue-name", ResHdr),
+    MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
+    "package" = proplists:get_value("x-lmq-message-type", ResHdr),
+    true = "multipart/mixed; boundary=" ++ MsgId
+        =:= proplists:get_value("content-type", ResHdr),
+
+    F0 = cowboy_multipart:parser(list_to_binary(MsgId)),
+    {headers, [{<<"content-type">>, <<"application/x-msgpack">>}, ?CTE], F1} = F0(Body),
+    {body, C1, F2} = F1(),
+    {end_of_part, F3} = F2(),
+    {headers, [{<<"content-type">>, <<"application/json">>}, ?CTE], F4} = F3(),
+    {body, <<"{\"testcase\":\"compound 2\"}">>, F5} = F4(),
+    {end_of_part, F6} = F5(),
+    eof = F6().
 
 error_case(Config) ->
     Name = ?config(qname, Config),
