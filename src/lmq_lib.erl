@@ -115,30 +115,30 @@ enqueue(Name, Content) ->
     enqueue(Name, Content, []).
 
 enqueue(Name, Content, Opts) ->
-    case proplists:get_value(pack, Opts, 0) == 0 of
+    case proplists:get_value(accum, Opts, 0) == 0 of
         true ->
             Retry = increment(proplists:get_value(retry, Opts, infinity)),
             Msg = #message{content=Content, retry=Retry},
             transaction(fun() -> mnesia:write(Name, Msg, write) end);
-        false -> %% Packed duration in milliseconds
-            pack_message(Name, Content, Opts)
+        false -> %% accumulate duration in milliseconds
+            accumulate_message(Name, Content, Opts)
     end.
 
-pack_message(Name, Content, Opts) ->
+accumulate_message(Name, Content, Opts) ->
     transaction(fun() ->
-        QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=packing}
+        QC = qlc:cursor(qlc:q([M || M=#message{id={TS, _}, state=accum}
                                     <- mnesia:table(Name),
                                     TS >= lmq_misc:unixtime()])),
         {Ret, Msg} = case qlc:next_answers(QC, 1) of
-            [M] -> %% packing process already started
+            [M] -> %% accumulating process already started
                 Content1 = M#message.content ++ [Content],
-                {packed, M#message{content=Content1}};
-            [] -> %% add new message for packing
+                {{accum, yes}, M#message{content=Content1}};
+            [] -> %% add new message for accumulating
                 Retry = increment(proplists:get_value(retry, Opts, infinity)),
-                Duration = proplists:get_value(pack, Opts),
+                Duration = proplists:get_value(accum, Opts),
                 Id={lmq_misc:unixtime() + Duration / 1000, uuid:get_v4()},
-                {packing_started, #message{id=Id, state=packing, type=package,
-                                           retry=Retry, content=[Content]}}
+                {{accum, new}, #message{id=Id, state=accum, type=compound,
+                                        retry=Retry, content=[Content]}}
         end,
         mnesia:write(Name, Msg, write),
         ok = qlc:delete_cursor(QC),
@@ -345,8 +345,8 @@ export_message_test() ->
     ?assertEqual([{id, UUID}, {type, normal}, {content, Ref}],
                  export_message(M)),
 
-    M2 = M#message{type=package},
-    ?assertEqual([{id, UUID}, {type, package}, {content, Ref}],
+    M2 = M#message{type=compound},
+    ?assertEqual([{id, UUID}, {type, compound}, {content, Ref}],
                  export_message(M2)).
 
 -endif.
