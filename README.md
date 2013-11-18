@@ -159,6 +159,11 @@ LMQ は HTTP インタフェースを 8180 番ポートで提供しています�
 * 概要: メッセージをキューから1つ取得する
 * パラメータ:
     * name: キュー名
+* クエリパラメータ（オプション）
+    * t: Timeout, メッセージを取得できるまで待つ時間（秒）
+    * cf: Compound Format, 複合メッセージのフォーマット
+        * multipart: `multipart/mixed` 形式。デフォルト
+        * msgpack: `msgpack` 形式
 * レスポンスコード: `200 OK`
 * レスポンスヘッダ:
     * content-type: POST 時の content-type
@@ -190,6 +195,7 @@ LMQ は HTTP インタフェースを 8180 番ポートで提供しています�
 * 概要: メッセージを regexp にマッチするキューの**いずれか**から1つ取得する
 * パラメータ:
     * qre: 対象のキューを絞り込む正規表現
+* クエリパラメータ（オプション）: `GET /msgs/:name` と同様
 * レスポンス: `GET /msgs/:name` と同様
 
 #### POST /msgs?qre=:regexp
