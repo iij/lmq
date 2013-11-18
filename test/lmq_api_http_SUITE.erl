@@ -68,6 +68,13 @@ push_pull_ack_delete(Config) ->
     {ok, "204", _, _} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0", [], get),
 
+    %% ignore cf parameter
+    {ok, "200", _, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
+        [?CT_JSON], post, Content),
+    {ok, "200", ResHdr4, Content} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?cf=msgpack", [], get),
+    "application/json" = proplists:get_value("content-type", ResHdr4),
+
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE2(Name), [], delete),
     not_found = lmq_queue_mgr:get(list_to_atom(Name)).
 
@@ -192,13 +199,14 @@ multi(_Config) ->
 compound(Config) ->
     Name = ?config(qname, Config),
     C1 = msgpack:pack({[{"testcase", "compound 1"}]}),
+    C2 = <<"{\"testcase\":\"compound 2\"}">>,
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name),
-        [?CT_JSON], patch, <<"{\"accum\":0.3,\"retry\":0}">>),
+        [?CT_JSON], patch, <<"{\"accum\":0.3,\"retry\":5,\"timeout\":0}">>),
 
     {ok, "200", _, "{\"accum\":\"new\"}"} = ibrowse:send_req(
         ?URL_QUEUE(Name), [{"content-type", "application/x-msgpack"}], post, C1),
     {ok, "200", _, "{\"accum\":\"yes\"}"} = ibrowse:send_req(
-        ?URL_QUEUE(Name), [?CT_JSON], post, "{\"testcase\":\"compound 2\"}"),
+        ?URL_QUEUE(Name), [?CT_JSON], post, C2),
 
     {ok, "200", ResHdr, Body} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0.3", [], get, [], [{response_format, binary}]),
@@ -213,9 +221,31 @@ compound(Config) ->
     {body, C1, F2} = F1(),
     {end_of_part, F3} = F2(),
     {headers, [{<<"content-type">>, <<"application/json">>}, ?CTE], F4} = F3(),
-    {body, <<"{\"testcase\":\"compound 2\"}">>, F5} = F4(),
+    {body, C2, F5} = F4(),
     {end_of_part, F6} = F5(),
-    eof = F6().
+    eof = F6(),
+
+    %% explicit use multipart format
+    {ok, "200", ResHdr2, _} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?t=0&cf=multipart", [], get, [], [{response_format, binary}]),
+    MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),
+    true = "multipart/mixed; boundary=" ++ MsgId2
+        =:= proplists:get_value("content-type", ResHdr2),
+
+    %% use msgpack format
+    {ok, "200", ResHdr3, Body3} = ibrowse:send_req(
+        ?URL_QUEUE(Name) ++ "?t=0&cf=msgpack", [], get, [], [{response_format, binary}]),
+    "application/x-msgpack" = proplists:get_value("content-type", ResHdr3),
+    {ok, [[{[{<<"content-type">>, <<"application/x-msgpack">>}]}, C1],
+          [{[{<<"content-type">>, <<"application/json">>}]}, C2]]}
+        = msgpack:unpack(Body3),
+
+    %% multi
+    {ok, "200", _, Body3} = ibrowse:send_req(?URL_MULTI(Name) ++ "&t=0&cf=msgpack",
+        [], get, [], [{response_format, binary}]),
+
+    %% invalid compound format
+    {ok, "400", _, _} = ibrowse:send_req(?URL_QUEUE(Name) ++ "?t=0&cf=json", [], get).
 
 error_case(Config) ->
     Name = ?config(qname, Config),
