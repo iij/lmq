@@ -17,8 +17,9 @@ push(Name, Content) when is_binary(Name) ->
     Bin = msgpack:pack(Content),
     case lmq:push(Name, [{<<"content-type">>,
                           <<"application/x-msgpack">>}], Bin) of
-        packing_started -> <<"packing started">>;
-        Other -> list_to_binary(atom_to_list(Other))
+        ok -> <<"ok">>;
+        {accum, new} -> <<"packing started">>;
+        {accum, yes} -> <<"packed">>
     end.
 
 pull(Name) when is_binary(Name) ->
@@ -79,7 +80,7 @@ update_props(Name, Props) when is_binary(Name) ->
     lager:info("lmq_api:update_props(~s, ~p)", [Name, Props]),
     case normalize_props(Props) of
         {ok, Props2} ->
-            lmq:update_props(Name, Props2),
+            lmq:update_props(Name, to_new_props(Props2)),
             <<"ok">>;
         {error, Reason} ->
             throw(Reason)
@@ -89,7 +90,8 @@ set_default_props(PropsList) ->
     lager:info("lmq_api:set_default_props(~p)", [PropsList]),
     case normalize_default_props(PropsList) of
         {ok, PropsList2} ->
-            case lmq:set_default_props(PropsList2) of
+            PropsList3 = [{K, to_new_props(V)} || {K, V} <- PropsList2],
+            case lmq:set_default_props(PropsList3) of
                 ok -> <<"ok">>;
                 Reason -> throw(Reason)
             end;
@@ -99,7 +101,8 @@ set_default_props(PropsList) ->
 
 get_default_props() ->
     lager:info("lmq_api:get_default_props()"),
-    export_default_props(lmq:get_default_props()).
+    Props = [{K, to_old_props(V)} || {K, V} <- lmq:get_default_props()],
+    export_default_props(Props).
 
 normalize_props({Props}) ->
     %% jiffy style to proplists
@@ -129,6 +132,8 @@ export_message(Msg) ->
 
 export_message([{id, V} | Tail], Acc) ->
     export_message(Tail, [{<<"id">>, V} | Acc]);
+export_message([{type, compound} | Tail], Acc) ->
+    export_message(Tail, [{<<"type">>, <<"package">>} | Acc]);
 export_message([{K, V} | Tail], Acc) when is_atom(V) ->
     export_message(Tail, [{atom_to_binary(K, latin1),
                            atom_to_binary(V, latin1)} | Acc]);
@@ -139,6 +144,8 @@ export_message([], Acc) ->
 
 normalize_props([{<<"pack">>, Duration} | T], Acc) when is_number(Duration) ->
     normalize_props(T, [{pack, round(Duration * 1000)} | Acc]);
+normalize_props([{<<"accum">>, Duration} | T], Acc) when is_number(Duration) ->
+    normalize_props(T, [{accum, round(Duration * 1000)} | Acc]);
 normalize_props([{<<"retry">>, N} | T], Acc) when is_integer(N) ->
     normalize_props(T, [{retry, N} | Acc]);
 normalize_props([{<<"timeout">>, N} | T], Acc) when is_number(N) ->
@@ -150,6 +157,8 @@ normalize_props(_, _) ->
 
 export_props([{pack, Duration} | T], Acc) ->
     export_props(T, [{<<"pack">>, Duration / 1000} | Acc]);
+export_props([{accum, Duration} | T], Acc) ->
+    export_props(T, [{<<"accum">>, Duration / 1000} | Acc]);
 export_props([{K, V} | T], Acc) ->
     export_props(T, [{atom_to_binary(K, latin1), V} | Acc]);
 export_props([], Acc) ->
@@ -172,7 +181,7 @@ export_default_props([], Acc) ->
 
 extract_content_value([QUEUE, ID, {type, normal}=TYPE, {content, {MD, V}}]) ->
     [QUEUE, ID, TYPE, {content, maybe_decode(MD, V)}];
-extract_content_value([QUEUE, ID, {type, package}=TYPE, {content, Content}]) ->
+extract_content_value([QUEUE, ID, {type, compound}=TYPE, {content, Content}]) ->
     [QUEUE, ID, TYPE, {content, [maybe_decode(MD, V) || {MD, V} <- Content]}].
 
 maybe_decode(MD, V) ->
@@ -183,6 +192,12 @@ maybe_decode(MD, V) ->
         _ ->
             V
     end.
+
+to_new_props(Props) ->
+    lists:keymap(fun(pack) -> accum; (Other) -> Other end, 1, Props).
+
+to_old_props(Props) ->
+    lists:keymap(fun(accum) -> pack; (Other) -> Other end, 1, Props).
 
 %% ==================================================================
 %% EUnit test
@@ -227,9 +242,15 @@ export_message_test() ->
                    {<<"content">>, Ref}]},
                  export_message(lmq_lib:export_message(M))),
 
-    M2 = M#message{type=package},
+    M2 = M#message{type=compound},
     ?assertEqual({[{<<"queue">>, <<"test">>}, {<<"id">>, UUID},
                    {<<"type">>, <<"package">>}, {<<"content">>, Ref}]},
                  export_message([{queue, test} | lmq_lib:export_message(M2)])).
+
+props_compatibility_test() ->
+    ?assertEqual([{accum, 0}, {retry, 2}, {timeout, 30}],
+                 to_new_props([{pack, 0}, {retry, 2}, {timeout, 30}])),
+    ?assertEqual([{pack, 0}, {retry, 2}, {timeout, 30}],
+                 to_old_props([{accum, 0}, {retry, 2}, {timeout, 30}])).
 
 -endif.

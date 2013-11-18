@@ -76,11 +76,9 @@ terminate({error, _}, _Req, _State) ->
 export_push_resp({ok, L}) when is_list(L) ->
     {[{N, export_push_resp(R)} || {N, R} <- L]};
 export_push_resp(ok) ->
-    {[{packed, no}]};
-export_push_resp(packing_started) ->
-    {[{packed, new}]};
-export_push_resp(packed) ->
-    {[{packed, yes}]}.
+    {[{accum, no}]};
+export_push_resp({accum, _}=R) ->
+    {[R]}.
 
 validate_multi_request(Req) ->
     case cowboy_req:qs_val(<<"qre">>, Req) of
@@ -108,7 +106,7 @@ encode_body(normal, Msg) ->
     {MD, V} = proplists:get_value(content, Msg),
     CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
     {CT, V};
-encode_body(package, Msg) ->
+encode_body(compound, Msg) ->
     Boundary = proplists:get_value(id, Msg),
     V = to_multipart(Boundary, proplists:get_value(content, Msg)),
     {<<"multipart/mixed; boundary=", Boundary/binary>>, V}.

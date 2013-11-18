@@ -42,7 +42,7 @@ end_per_testcase(_, Config) ->
 push_pull_ack_delete(Config) ->
     Name = ?config(qname, Config),
     Content = "{\"message\":\"lmq test\"}",
-    ResBody = "{\"packed\":\"no\"}",
+    ResBody = "{\"accum\":\"no\"}",
 
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [?CT_JSON], post, Content),
@@ -80,7 +80,7 @@ accidentally_closed(Config) ->
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE(Name),
         [?CT_JSON], post, Content),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"packed\":\"no\"}" = ResBody,
+    "{\"accum\":\"no\"}" = ResBody,
 
     ct:timetrap(100),
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
@@ -121,21 +121,21 @@ nack_ext(Config) ->
 queue_props(Config) ->
     Name = ?config(qname, Config),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
-        <<"{\"pack\":30,\"retry\":0}">>),
+        <<"{\"accum\":30,\"retry\":0}">>),
     {ok, "422", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
         <<"{\"foo\":\"30\"}">>),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
-    "{\"pack\":30,\"retry\":0,\"timeout\":30}" = ResBody,
+    "{\"accum\":30,\"retry\":0,\"timeout\":30}" = ResBody,
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete),
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
-    "{\"pack\":0,\"retry\":2,\"timeout\":30}" = ResBody2.
+    "{\"accum\":0,\"retry\":2,\"timeout\":30}" = ResBody2.
 
 default_props(Config) ->
     Name = ?config(qname, Config),
-    PropList = "[[\"pack/.*\",{\"pack\":30}],[\".*\",{\"retry\":0}]]",
+    PropList = "[[\"accum/.*\",{\"accum\":30}],[\".*\",{\"retry\":0}]]",
     {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
 
@@ -144,7 +144,7 @@ default_props(Config) ->
     {ok, "200", ResHdr2, PropList} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
 
-    {ok, "200", _, "{\"pack\":0,\"retry\":0,\"timeout\":30}"} =
+    {ok, "200", _, "{\"accum\":0,\"retry\":0,\"timeout\":30}"} =
         ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], delete),
@@ -154,7 +154,7 @@ multi(_Config) ->
     Names = ["multi%2fa", "multi%2fb"],
     Regexp = "multi%2f.*",
     Content = "{\"testcase\":\"multi\"}",
-    ResBody = "{\"multi/a\":{\"packed\":\"no\"},\"multi/b\":{\"packed\":\"no\"}}",
+    ResBody = "{\"multi/a\":{\"accum\":\"no\"},\"multi/b\":{\"accum\":\"no\"}}",
 
     [{ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete)
         || Name <- Names],
@@ -193,18 +193,18 @@ compound(Config) ->
     Name = ?config(qname, Config),
     C1 = msgpack:pack({[{"testcase", "compound 1"}]}),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name),
-        [?CT_JSON], patch, <<"{\"pack\":0.3,\"retry\":0}">>),
+        [?CT_JSON], patch, <<"{\"accum\":0.3,\"retry\":0}">>),
 
-    {ok, "200", _, "{\"packed\":\"new\"}"} = ibrowse:send_req(
+    {ok, "200", _, "{\"accum\":\"new\"}"} = ibrowse:send_req(
         ?URL_QUEUE(Name), [{"content-type", "application/x-msgpack"}], post, C1),
-    {ok, "200", _, "{\"packed\":\"yes\"}"} = ibrowse:send_req(
+    {ok, "200", _, "{\"accum\":\"yes\"}"} = ibrowse:send_req(
         ?URL_QUEUE(Name), [?CT_JSON], post, "{\"testcase\":\"compound 2\"}"),
 
     {ok, "200", ResHdr, Body} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0.3", [], get, [], [{response_format, binary}]),
     Name = proplists:get_value("x-lmq-queue-name", ResHdr),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
-    "package" = proplists:get_value("x-lmq-message-type", ResHdr),
+    "compound" = proplists:get_value("x-lmq-message-type", ResHdr),
     true = "multipart/mixed; boundary=" ++ MsgId
         =:= proplists:get_value("content-type", ResHdr),
 
