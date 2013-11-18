@@ -154,12 +154,7 @@ terminate(_Reason, _State) ->
 %% ==================================================================
 
 handle_queue_call({push, Content}, _From, S=#state{}) ->
-    Retry = proplists:get_value(retry, S#state.props),
-    Opts = case proplists:get_value(pack, S#state.props) of
-        T when is_integer(T) -> [{retry, Retry}, {pack, T}];
-        _ -> [{retry, Retry}]
-    end,
-    R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    R = lmq_lib:enqueue(S#state.name, Content, S#state.props),
     lmq_event:new_message(S#state.name),
     lmq_metrics:update_metric(S#state.name, push),
     {reply, R, S};
