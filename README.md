@@ -35,7 +35,7 @@ LMQ は Erlang で書かれたメッセージキューです。名前を付け�
 
 メッセージの投入は HTTP 経由で行います。以下では重要でないヘッダは省略しています。
 
-    $ curl -i -XPOST localhost:8180/msgs/myqueue -H 'content-type: text/plain' -d 'hello world!'
+    $ curl -i -XPOST localhost:9980/msgs/myqueue -H 'content-type: text/plain' -d 'hello world!'
     HTTP/1.1 200 OK
     content-length: 15
     content-type: application/json
@@ -46,7 +46,7 @@ LMQ は Erlang で書かれたメッセージキューです。名前を付け�
 
 キューに投入したメッセージを取り出します。
 
-    $ curl -i localhost:8180/msgs/myqueue
+    $ curl -i localhost:9980/msgs/myqueue
     HTTP/1.1 200 OK
     content-length: 12
     content-type: text/plain
@@ -60,7 +60,7 @@ LMQ は Erlang で書かれたメッセージキューです。名前を付け�
 
 その他、メッセージを処理するために重要な情報が HTTP ヘッダに含まれます。`x-lmq-message-id` は各メッセージに割り当てられたユニークな ID です。LMQ はメッセージの再送処理のために、処理が完了したら ack を返すことになっています。この時にメッセージ ID を用います。
 
-    $ curl -i -XPOST 'localhost:8180/msgs/myqueue/f0eca12e-19f2-4922-bcc9-6e42bd585937?reply=ack'
+    $ curl -i -XPOST 'localhost:9980/msgs/myqueue/f0eca12e-19f2-4922-bcc9-6e42bd585937?reply=ack'
     HTTP/1.1 204 No Content
 
 `404 Not Found` が返ってきた場合は、既にメッセージがタイムアウトして再送待ちになっている可能性があります。メッセージを取り出すところからやり直してみてください。デフォルトでは、再送までの時間は30秒に設定されています。
@@ -150,7 +150,7 @@ API のアクセスログは `info` レベルで吐かれるので、lager の�
 ```
 
 ## <a name="http_api">HTTP API</a>
-LMQ は HTTP インタフェースを 8180 番ポートで提供しています（ポートは変更可能）。URL に渡す値は全て URL エンコードしてください。
+LMQ は HTTP インタフェースを 9980 番ポートで提供しています（ポートは変更可能）。URL に渡す値は全て URL エンコードしてください。
 
 リクエスト/レスポンスは JSON 形式です。
 
