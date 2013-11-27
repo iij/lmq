@@ -42,5 +42,6 @@ start_cowboy({Ip, Port}) ->
     {ok, Ip2} = inet_parse:address(Ip),
     cowboy:start_http(lmq_http_listener, 100,
         [{ip, Ip2}, {port, Port}],
-        [{env, [{dispatch, Dispatch}]}]
+        [{env, [{dispatch, Dispatch}]},
+         {max_keepalive, 10000}]
     ).
