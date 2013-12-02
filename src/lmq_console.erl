@@ -58,8 +58,8 @@ status([]) ->
             proplists:get_value(memory, QStatus)
         ]),
         Props = proplists:get_value(props, QStatus),
-        io:format("  pack: ~p, retry: ~B, timeout: ~p~n", [
-            proplists:get_value(pack, Props) / 1000,
+        io:format("  accum: ~p, retry: ~B, timeout: ~p~n", [
+            proplists:get_value(accum, Props) / 1000,
             proplists:get_value(retry, Props),
             proplists:get_value(timeout, Props) / 1
         ])

@@ -7,14 +7,16 @@
 -export([init/1, handle_event/3, handle_sync_event/4, handle_info/3,
     terminate/3, code_change/4,
     idle/2, idle/3, waiting/2, finalize/2]).
--export([start/0, start_link/0, pull/2, pull/3, maybe_pull/2, list_active/0]).
+-export([start/0, start_link/0, pull/2, pull/3,
+    pull_async/2, pull_async/3, pull_cancel/1,
+    maybe_pull/2, list_active/0]).
 
 -define(UNEXPECTED(Event, State),
     lager:warning("~p received unknown event ~p while in state ~p",
         [self(), Event, State])).
 -define(CLOSE_WAIT, 10).
 
--record(state, {from, regexp, timeout, mapping}).
+-record(state, {from, monitor, regexp, timeout, mapping}).
 
 %% ==================================================================
 %% Public API
@@ -29,11 +31,17 @@ start_link() ->
 pull(Pid, Regexp) ->
     gen_fsm:sync_send_event(Pid, {pull, Regexp, infinity}, infinity).
 
-pull(Pid, Regexp, 0) ->
-    gen_fsm:sync_send_event(Pid, {pull, Regexp, 0}, infinity);
-
 pull(Pid, Regexp, Timeout) ->
     gen_fsm:sync_send_event(Pid, {pull, Regexp, Timeout}, infinity).
+
+pull_async(Pid, Regexp) ->
+    pull_async(Pid, Regexp, infinity).
+
+pull_async(Pid, Regexp, Timeout) ->
+    gen_fsm:sync_send_event(Pid, {pull_async, Regexp, Timeout}).
+
+pull_cancel(Pid) ->
+    gen_fsm:send_event(Pid, cancel).
 
 maybe_pull(Pid, QName) when is_atom(QName) ->
     gen_fsm:send_event(Pid, {maybe_pull, QName}).
@@ -52,19 +60,32 @@ idle(Event, State) ->
     ?UNEXPECTED(Event, idle),
     {next_state, idle, State}.
 
-idle({pull, Regexp, Timeout}, From, #state{}=S) ->
+idle({pull, Regexp, Timeout}, {Pid, _}=From, #state{}=S) ->
+    Monitor = erlang:monitor(process, Pid),
     case lmq_queue_mgr:match(Regexp) of
         {error, _}=R ->
-            {stop, error, R, S};
+            {stop, error, R, S#state{from=From, monitor=Monitor}};
         Queues ->
-            Mapping = lists:foldl(fun({_, Pid}=Q, Acc) ->
-                Id = lmq_queue:pull_async(Pid, Timeout),
+            Mapping = lists:foldl(fun({_, QPid}=Q, Acc) ->
+                Id = lmq_queue:pull_async(QPid, Timeout),
                 dict:store(Id, Q, Acc)
             end, dict:new(), Queues),
-            gen_fsm:send_event_after(Timeout, cancel),
-            State = S#state{from=From, regexp=Regexp, timeout=Timeout,
-                            mapping=Mapping},
+            if is_number(Timeout), Timeout > 0 ->
+                gen_fsm:send_event_after(Timeout, cancel);
+                true -> ok
+            end,
+            State = S#state{from=From, monitor=Monitor, regexp=Regexp,
+                            timeout=Timeout, mapping=Mapping},
             {next_state, waiting, State}
+    end;
+
+idle({pull_async, Regexp, Timeout}, {Pid, _}=From, #state{}=S) ->
+    case idle({pull, Regexp, Timeout}, From, S) of
+        {next_state, Next, State} ->
+            Ref = make_ref(),
+            {reply, {ok, Ref}, Next, State#state{from={async, Pid, Ref}}};
+        Other ->
+            Other
     end;
 
 idle(Event, _From, State) ->
@@ -89,12 +110,12 @@ waiting({maybe_pull, QName}, #state{}=S) ->
     end,
     {next_state, waiting, State};
 
-waiting(cancel, #state{timeout=T}=S) when T > 0 ->
+waiting(cancel, #state{}=S) ->
     waiting(timeout, S);
 
 waiting(timeout, #state{}=S) ->
     cancel_pull(S#state.mapping),
-    gen_fsm:reply(S#state.from, <<"empty">>),
+    reply(S#state.from, empty),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 waiting(Event, State) ->
@@ -111,8 +132,8 @@ finalize(Event, State) ->
 handle_info({Id, #message{}=M}, waiting, #state{mapping=Mapping}=S) ->
     {Name, _} = dict:fetch(Id, Mapping),
     cancel_pull(dict:erase(Id, Mapping)),
-    {Response} = lmq_lib:export_message(M),
-    gen_fsm:reply(S#state.from, {[{<<"queue">>, atom_to_binary(Name, latin1)} | Response]}),
+    Response = lmq_lib:export_message(M),
+    reply(S#state.from, [{queue, Name} | Response]),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
@@ -121,7 +142,7 @@ handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
         [element(1, dict:fetch(Id, Mapping)), Reason, dict:size(Mapping1)]),
     case dict:size(Mapping1) of
         0 ->
-            gen_fsm:reply(S#state.from, <<"empty">>),
+            reply(S#state.from, empty),
             %% it is safe to shutdown because all responses are received.
             {stop, normal, S};
         _ ->
@@ -131,11 +152,15 @@ handle_info({Id, {error, Reason}}, waiting, #state{mapping=Mapping}=S) ->
 
 handle_info({Id, #message{id={_, UUID}}}, finalize, #state{}=S) ->
     {_, Pid} = dict:fetch(Id, S#state.mapping),
-    lmq_queue:release(Pid, UUID),
+    lmq_queue:put_back(Pid, UUID),
     {next_state, finalize, S, ?CLOSE_WAIT};
 
 handle_info({_Id, {error, _Reason}}, finalize, State) ->
     {next_state, finalize, State, ?CLOSE_WAIT};
+
+handle_info({'DOWN', Monitor, process, _, _}, _, #state{monitor=Monitor}=S) ->
+    cancel_pull(S#state.mapping),
+    {next_state, finalize, S, ?CLOSE_WAIT};
 
 handle_info(Event, StateName, State) ->
     ?UNEXPECTED(Event, StateName),
@@ -149,10 +174,12 @@ handle_sync_event(Event, _From, StateName, State) ->
     ?UNEXPECTED(Event, StateName),
     {reply, error, StateName, State}.
 
-terminate(normal, _StateName, _State) ->
+terminate(normal, _StateName, #state{monitor=Monitor}) ->
+    erlang:demonitor(Monitor, [flush]),
     ok;
 
-terminate(error, _StateName, _State) ->
+terminate(error, _StateName, #state{monitor=Monitor}) ->
+    erlang:demonitor(Monitor, [flush]),
     ok.
 
 code_change(_OldVsn, StateName, State, _Extra) ->
@@ -165,3 +192,8 @@ code_change(_OldVsn, StateName, State, _Extra) ->
 cancel_pull(Mapping) ->
     %% after calling this function, queues never sent a new message.
     dict:map(fun(Id, {_, Pid}) -> lmq_queue:pull_cancel(Pid, Id) end, Mapping).
+
+reply({async, Pid, Ref}, Msg) ->
+    Pid ! {Ref, Msg};
+reply(From, Msg) ->
+    gen_fsm:reply(From, Msg).

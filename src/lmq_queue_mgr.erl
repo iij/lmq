@@ -65,11 +65,12 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
         {ok, {Pid, _}} ->
             case proplists:get_value(update, Opts) of
                 true ->
-                    Base = lmq_lib:queue_info(Name),
-                    Props = proplists:get_value(props, Opts, []),
-                    Props1 = lmq_misc:extend(Props, Base),
+                    Props1 = case proplists:get_value(props, Opts, []) of
+                        [] -> [];
+                        Props -> lmq_misc:extend(Props, lmq_lib:queue_info(Name))
+                    end,
                     ok = lmq_queue:props(Pid, Props1),
-                    lager:info("Queue properties are updated: ~s ~p", [Name, Props]),
+                    lager:info("Queue properties are updated: ~s ~p", [Name, Props1]),
                     {reply, Pid, S};
                 undefined ->
                     {reply, Pid, S}
@@ -178,12 +179,12 @@ validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Re
 
 validate_props_test() ->
     ?assertEqual(
-        {ok, [{element(2, re:compile("lmq/a")), [{pack, 0}, {retry, 1}, {timeout, 30}]},
-              {element(2, re:compile("lmq/.*")), [{pack, 0}, {retry, 2}, {timeout, 60}]}]},
+        {ok, [{element(2, re:compile("lmq/a")), [{accum, 0}, {retry, 1}, {timeout, 30}]},
+              {element(2, re:compile("lmq/.*")), [{accum, 0}, {retry, 2}, {timeout, 60}]}]},
         validate_props_list([{"lmq/a", [{retry, 1}]},
                              {"lmq/.*", [{timeout, 60}]}])),
     ?assertEqual(
-        {ok, [{element(2, re:compile(<<"lmq/.*">>)), [{pack, 0}, {retry, 1}, {timeout, 30}]}]},
+        {ok, [{element(2, re:compile(<<"lmq/.*">>)), [{accum, 0}, {retry, 1}, {timeout, 30}]}]},
         validate_props_list([{<<"lmq/.*">>, [{retry, 1}]}])),
     ?assertEqual(
         {error, invalid_syntax},

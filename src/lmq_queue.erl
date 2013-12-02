@@ -2,7 +2,7 @@
 -behaviour(gen_server).
 -export([start/1, start/2, start_link/1, start_link/2, stop/1, notify/1,
     push/2, pull/1, pull/2, pull_async/1, pull_async/2, pull_cancel/2,
-    done/2, retain/2, release/2, props/2, get_properties/1,
+    done/2, retain/2, release/2, put_back/2, props/2, get_properties/1,
     reload_properties/1]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
@@ -68,6 +68,9 @@ retain(Pid, UUID) ->
 
 release(Pid, UUID) ->
     gen_server:call(Pid, {release, UUID}).
+
+put_back(Pid, UUID) ->
+    gen_server:call(Pid, {put_back, UUID}).
 
 props(Pid, Props) ->
     gen_server:call(Pid, {props, Props}).
@@ -151,12 +154,7 @@ terminate(_Reason, _State) ->
 %% ==================================================================
 
 handle_queue_call({push, Content}, _From, S=#state{}) ->
-    Retry = proplists:get_value(retry, S#state.props),
-    Opts = case proplists:get_value(pack, S#state.props) of
-        T when is_integer(T) -> [{retry, Retry}, {pack, T}];
-        _ -> [{retry, Retry}]
-    end,
-    R = lmq_lib:enqueue(S#state.name, Content, Opts),
+    R = lmq_lib:enqueue(S#state.name, Content, S#state.props),
     lmq_event:new_message(S#state.name),
     lmq_metrics:update_metric(S#state.name, push),
     {reply, R, S};
@@ -184,6 +182,10 @@ handle_queue_call({retain, UUID}, _From, S=#state{props=Props}) ->
 
 handle_queue_call({release, UUID}, _From, S=#state{}) ->
     R = lmq_lib:release(S#state.name, UUID),
+    {reply, R, S};
+
+handle_queue_call({put_back, UUID}, _From, S=#state{}) ->
+    R = lmq_lib:put_back(S#state.name, UUID),
     {reply, R, S};
 
 handle_queue_call({props, Props}, _From, S=#state{}) ->

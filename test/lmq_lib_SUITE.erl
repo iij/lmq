@@ -6,12 +6,12 @@
 -export([init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2,
     all/0]).
 -export([lmq_info/1, create_delete/1, queue_names/1, done/1, release/1, retain/1, waittime/1,
-    limit_retry/1, error_case/1, packing/1, property/1, many_waste_messages/1]).
+    limit_retry/1, error_case/1, accumlate/1, property/1, many_waste_messages/1]).
 -export([enqueue_many/2]).
 
 all() ->
     [lmq_info, create_delete, queue_names, done, release, retain, waittime, limit_retry,
-     error_case, packing, property, many_waste_messages].
+     error_case, accumlate, property, many_waste_messages].
 
 init_per_suite(Config) ->
     Priv = ?config(priv_dir, Config),
@@ -95,7 +95,11 @@ release(Config) ->
     {_, UUID} = M#message.id,
     ok = lmq_lib:release(Name, UUID),
     not_found = lmq_lib:release(Name, UUID),
-    2 = (lmq_lib:dequeue(Name, 30))#message.retry,
+
+    M1 = lmq_lib:dequeue(Name, 30),
+    1 = M1#message.retry,
+    ok = lmq_lib:put_back(Name, element(2, M1#message.id)),
+    1 = (lmq_lib:dequeue(Name, 30))#message.retry,
 
     ok = lmq_lib:enqueue(Name, make_ref()),
     M2 = lmq_lib:dequeue(Name, 30),
@@ -145,23 +149,23 @@ error_case(_Config) ->
     {error, no_queue_exists} = lmq_lib:retain(Name, "AAA", 30),
     {error, no_queue_exists} = lmq_lib:waittime(Name).
 
-packing(Config) ->
+accumlate(Config) ->
     Name = ?config(qname, Config),
     Timeout = 30,
     R1 = make_ref(), R2 = make_ref(), R3 = make_ref(),
-    %% 0 means not packing
-    ok = lmq_lib:enqueue(Name, R1, [{pack, 0}]),
+    %% 0 means not accumulate
+    ok = lmq_lib:enqueue(Name, R1, [{accum, 0}]),
     R1 = (lmq_lib:dequeue(Name, Timeout))#message.content,
 
-    %% get 2 packages, each package contains 1 message
-    packing_started = lmq_lib:enqueue(Name, R1, [{pack, 1}]), timer:sleep(1),
-    packing_started = lmq_lib:enqueue(Name, R2, [{pack, 1}]), timer:sleep(1),
+    %% get 2 compound messages, each compound message contains 1 message
+    {accum, new} = lmq_lib:enqueue(Name, R1, [{accum, 1}]), timer:sleep(1),
+    {accum, new} = lmq_lib:enqueue(Name, R2, [{accum, 1}]), timer:sleep(1),
     [R1] = (lmq_lib:dequeue(Name, Timeout))#message.content,
     [R2] = (lmq_lib:dequeue(Name, Timeout))#message.content,
 
-    %% packing and no packing message
-    packing_started = lmq_lib:enqueue(Name, R1, [{pack, 100}]),
-    packed = lmq_lib:enqueue(Name, R2, [{pack, 100}]),
+    %% accumulate and no accumulate message
+    {accum, new} = lmq_lib:enqueue(Name, R1, [{accum, 100}]),
+    {accum, yes} = lmq_lib:enqueue(Name, R2, [{accum, 100}]),
     ok = lmq_lib:enqueue(Name, R3),
     R3 = (lmq_lib:dequeue(Name, Timeout))#message.content,
     empty = lmq_lib:dequeue(Name, Timeout),
@@ -187,9 +191,9 @@ property(_Config) ->
     P3 = lmq_lib:get_properties(N3),
     P3 = lmq_lib:get_properties(N2, [{retry, 0}]),
 
-    P4 = lmq_misc:extend([{pack, 1}], ?DEFAULT_QUEUE_PROPS),
-    P5 = lmq_misc:extend([{pack, 1}, {retry, 0}], ?DEFAULT_QUEUE_PROPS),
-    lmq_lib:set_lmq_info(default_props, [{"override", [{pack, 1}]}]),
+    P4 = lmq_misc:extend([{accum, 1}], ?DEFAULT_QUEUE_PROPS),
+    P5 = lmq_misc:extend([{accum, 1}, {retry, 0}], ?DEFAULT_QUEUE_PROPS),
+    lmq_lib:set_lmq_info(default_props, [{"override", [{accum, 1}]}]),
     P1 = lmq_lib:get_properties(N1),
     P4 = lmq_lib:get_properties(N2),
     P5 = lmq_lib:get_properties(N3).

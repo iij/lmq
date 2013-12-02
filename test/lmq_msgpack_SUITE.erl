@@ -6,6 +6,8 @@
 -export([push_pull_done/1, release/1, props_and_timeout/1, packed_queue/1,
     push_all/1, pull_any/1, default_props/1]).
 
+-define(RPC(Client, Method, Args), msgpack_rpc_client:call(Client, Method, Args)).
+
 all() ->
     [push_pull_done, release, props_and_timeout, packed_queue, push_all, pull_any,
      default_props].
@@ -57,12 +59,22 @@ release(Config) ->
 props_and_timeout(Config) ->
     Client = ?config(client, Config),
     Name = ?config(qname, Config),
-    Props = {[{<<"retry">>, 0}, {<<"timeout">>, 0}]},
+    Props = {[{<<"retry">>, 1}, {<<"timeout">>, 0}]},
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, update_props, [Name, Props]),
+    {error, _} = msgpack_rpc_client:call(Client, update_props, [Name, {[{<<"pack">>, <<"10">>}]}]),
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, <<"test">>]),
     {ok, Res} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]),
     {[{<<"queue">>, Name}, {<<"id">>, _UUID}, {<<"type">>, <<"normal">>}, {<<"content">>, <<"test">>}]} = Res,
-    {ok, <<"empty">>} = msgpack_rpc_client:call(Client, pull, [Name, 0.2]).
+    {ok, {[_, _, _, {<<"content">>, <<"test">>}]}} = ?RPC(Client, pull, [Name, 0]),
+    {ok, <<"empty">>} = ?RPC(Client, pull, [Name, 0.1]),
+
+    {ok, <<"ok">>} = ?RPC(Client, update_props, [Name]),
+    timer:sleep(10),
+    ct:pal("~p", [lmq:get_props(Name)]),
+    {ok, <<"ok">>} = ?RPC(Client, push, [Name, <<"test2">>]),
+    ct:pal("~p", [lmq:get_props(Name)]),
+    {ok, {[_, _, _, _]}} = ?RPC(Client, pull, [Name, 0]),
+    {ok, <<"empty">>} = ?RPC(Client, pull, [Name, 0]).
 
 packed_queue(Config) ->
     Client = ?config(client, Config),
@@ -112,11 +124,11 @@ pull_any(Config) ->
 
 default_props(Config) ->
     Client = ?config(client, Config),
-    %% Name = ?config(qname, Config),
     DefaultProps = [[<<"def/">>, {[{<<"retry">>, 0}, {<<"timeout">>, 0}]}],
                     [<<"lmq/">>, {[{<<"timeout">>, 0}]}]],
-    %% {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]).
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, set_default_props, [DefaultProps]),
+    {error, _} = msgpack_rpc_client:call(Client, set_default_props,
+        lists:nth(1, DefaultProps)),
     {ok, DefaultProps} = msgpack_rpc_client:call(Client, get_default_props, []),
     Name = <<"def/a">>,
     {ok, <<"ok">>} = msgpack_rpc_client:call(Client, push, [Name, 1]),

@@ -1,5 +1,5 @@
 -module(lmq_misc).
--export([unixtime/0, extend/2]).
+-export([unixtime/0, extend/2, btof/1]).
 
 unixtime() ->
     {MegaSecs, Secs, MicroSecs} = os:timestamp(),
@@ -11,6 +11,12 @@ extend(Override, Base) ->
     end, Base, Override),
     lists:keysort(1, Props).
 
+btof(B) ->
+    B2 = <<B/binary, ".0">>,
+    case string:to_float(binary_to_list(B2)) of
+        {error, _} -> {error, badarg};
+        {F, _} -> {ok, F}
+    end.
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
@@ -35,5 +41,12 @@ extend_test() ->
               [{retry, infinity}, {timeout, 5}, {type, normal}]),
     ?assertEq(lmq_misc:extend([], [{timeout, 30}, {type, normal}]),
               [{timeout, 30}, {type, normal}]).
+
+binary_to_float_test() ->
+    ?assertEq({ok, 10.0}, btof(<<"10">>)),
+    ?assertEq({ok, 10.0}, btof(<<"10.0">>)),
+    ?assertEq({ok, 12.34}, btof(<<"12.34">>)),
+    ?assertEq({ok, 12.34}, btof(<<"12.34abc">>)),
+    ?assertEq({error, badarg}, btof(<<"abc">>)).
 
 -endif.
