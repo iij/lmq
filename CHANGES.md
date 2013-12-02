@@ -1,6 +1,6 @@
 ## 更新履歴
 
-### X.X.X (XXXX-XX-XX)
+### 0.6.0 (2013-12-02)
 * REST ベースの HTTP API を実装
     * MessagePack-RPC API と同等の機能を実装
     * 今後は HTTP API が標準になる予定
