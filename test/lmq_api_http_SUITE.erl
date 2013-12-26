@@ -236,9 +236,9 @@ compound(Config) ->
     {ok, "200", ResHdr3, Body3} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0&cf=msgpack", [], get, [], [{response_format, binary}]),
     "application/x-msgpack" = proplists:get_value("content-type", ResHdr3),
-    {ok, [[{[{<<"content-type">>, <<"application/x-msgpack">>}]}, C1],
-          [{[{<<"content-type">>, <<"application/json">>}]}, C2]]}
-        = msgpack:unpack(Body3),
+    {ok, [[{[{"content-type", "application/x-msgpack"}]}, C1],
+          [{[{"content-type", "application/json"}]}, C2]]}
+        = msgpack:unpack(Body3, [{enable_str, true}]),
 
     %% multi
     {ok, "200", _, Body3} = ibrowse:send_req(?URL_MULTI(Name) ++ "&t=0&cf=msgpack",

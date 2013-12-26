@@ -134,8 +134,8 @@ encode_body(compound, multipart, Msg) ->
     V = to_multipart(Boundary, proplists:get_value(content, Msg)),
     {<<"multipart/mixed; boundary=", Boundary/binary>>, V};
 encode_body(compound, msgpack, Msg) ->
-    V = [[{MD}, V] || {MD, V} <- proplists:get_value(content, Msg)],
-    {<<"application/x-msgpack">>, msgpack:pack(V)}.
+    V = [[{stringify_metadata(MD)}, V] || {MD, V} <- proplists:get_value(content, Msg)],
+    {<<"application/x-msgpack">>, msgpack:pack(V, [{enable_str, true}])}.
 
 to_multipart(Boundary, Contents) when is_list(Contents) ->
     [[[<<"\r\n--">>, Boundary, <<"\r\n">>, encode_multipart_item(C)]
@@ -148,3 +148,11 @@ encode_multipart_item({MD, V}) ->
      <<"\r\n">>,
      <<"Content-Transfer-Encoding: binary\r\n">>,
      <<"\r\n">>, V].
+
+stringify_metadata(MD) ->
+    stringify_metadata(MD, []).
+
+stringify_metadata([{K, V}|Tail], Acc) when is_binary(K), is_binary(V) ->
+    stringify_metadata(Tail, [{binary_to_list(K), binary_to_list(V)}|Acc]);
+stringify_metadata([], Acc) ->
+    lists:reverse(Acc).
