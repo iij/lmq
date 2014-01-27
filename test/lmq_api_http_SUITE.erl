@@ -7,10 +7,10 @@
 -export([push_pull_ack_delete/1, accidentally_closed/1, nack_ext/1,
     queue_props/1, default_props/1, multi/1, compound/1, error_case/1]).
 
--define(URL_QUEUE(Name), "http://localhost:9980/msgs/" ++ Name).
--define(URL_MULTI(Regexp), "http://localhost:9980/msgs?qre=" ++ Regexp).
--define(URL_QUEUE_PROPS(Name), "http://localhost:9980/props/" ++ Name).
--define(URL_MESSAGE(Name, Id, Reply), "http://localhost:9980/msgs/" ++
+-define(URL_QUEUE(Name), "http://localhost:9980/messages/" ++ Name).
+-define(URL_MULTI(Regexp), "http://localhost:9980/messages?qre=" ++ Regexp).
+-define(URL_QUEUE_PROPS(Name), "http://localhost:9980/properties/" ++ Name).
+-define(URL_MESSAGE(Name, Id, Reply), "http://localhost:9980/messages/" ++
     Name ++ "/" ++ Id ++ "?reply=" ++ Reply).
 -define(URL_QUEUE2(Name), "http://localhost:9980/queues/" ++ Name).
 -define(CT_JSON, {"content-type", "application/json"}).

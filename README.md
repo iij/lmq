@@ -49,7 +49,7 @@ Erlang R16B01 以上が必要になりますので、あらかじめインスト
 
 メッセージの投入は HTTP 経由で行います。以下では重要でないヘッダは省略しています。
 
-    $ curl -i -XPOST localhost:9980/msgs/myqueue -H 'content-type: text/plain' -d 'hello world!'
+    $ curl -i -XPOST localhost:9980/messages/myqueue -H 'content-type: text/plain' -d 'hello world!'
     HTTP/1.1 200 OK
     content-length: 15
     content-type: application/json
@@ -60,7 +60,7 @@ Erlang R16B01 以上が必要になりますので、あらかじめインスト
 
 キューに投入したメッセージを取り出します。
 
-    $ curl -i localhost:9980/msgs/myqueue
+    $ curl -i localhost:9980/messages/myqueue
     HTTP/1.1 200 OK
     content-length: 12
     content-type: text/plain
@@ -74,7 +74,7 @@ Erlang R16B01 以上が必要になりますので、あらかじめインスト
 
 その他、メッセージを処理するために重要な情報が HTTP ヘッダに含まれます。`x-lmq-message-id` は各メッセージに割り当てられたユニークな ID です。LMQ はメッセージの再送処理のために、処理が完了したら ack を返すことになっています。この時にメッセージ ID を用います。
 
-    $ curl -i -XPOST 'localhost:9980/msgs/myqueue/f0eca12e-19f2-4922-bcc9-6e42bd585937?reply=ack'
+    $ curl -i -XPOST 'localhost:9980/messages/myqueue/f0eca12e-19f2-4922-bcc9-6e42bd585937?reply=ack'
     HTTP/1.1 204 No Content
 
 `404 Not Found` が返ってきた場合は、既にメッセージがタイムアウトして再送待ちになっている可能性があります。メッセージを取り出すところからやり直してみてください。デフォルトでは、再送までの時間は30秒に設定されています。
@@ -169,7 +169,7 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
 リクエスト/レスポンスは JSON 形式です。
 
 ### メッセージ操作
-#### GET /msgs/:name
+#### GET /messages/:name
 * 概要: メッセージをキューから1つ取得する
 * パラメータ:
     * name: キュー名
@@ -188,7 +188,7 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
         * compound: 複合メッセージ
 * レスポンスボディ: POST されたデータ
 
-#### POST /msgs/:name
+#### POST /messages/:name
 * 概要: メッセージをキューに追加する
 * パラメータ:
     * name: キュー名
@@ -205,14 +205,14 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
     * yes: 既存のメッセージと集約された
     * no: 集約されなかった
 
-#### GET /msgs?qre=:regexp
+#### GET /messages?qre=:regexp
 * 概要: メッセージを regexp にマッチするキューの**いずれか**から1つ取得する
 * パラメータ:
     * qre: 対象のキューを絞り込む正規表現
-* クエリパラメータ（オプション）: `GET /msgs/:name` と同様
-* レスポンス: `GET /msgs/:name` と同様
+* クエリパラメータ（オプション）: `GET /messages/:name` と同様
+* レスポンス: `GET /messages/:name` と同様
 
-#### POST /msgs?qre=:regexp
+#### POST /messages?qre=:regexp
 * 概要: メッセージを regexp にマッチする**全ての**キューに追加する
 * パラメータ:
     * qre: 対象のキューを絞り込む正規表現
@@ -234,7 +234,7 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
     * yes: 既存のメッセージと集約された
     * no: 集約されなかった
 
-#### POST /msgs/:name/:msgid?reply=:type
+#### POST /messages/:name/:msgid?reply=:type
 * 概要: 取得したメッセージの処理結果を通知する
 * パラメータ:
     * name: キュー名
@@ -253,28 +253,28 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
 * レスポンスコード: `204 No Content`
 
 ### プロパティ操作
-#### GET /props
+#### GET /properties
 * 概要: デフォルトプロパティを取得する
 * レスポンスコード: `200 OK`
 * レスポンスボディ:
 
 ```json
-[[REGEXP, PROPS], ...]
+[[REGEXP, PROPERTIES], ...]
 ```
 
 * REGEXP: 対象のキューを絞り込む正規表現
-* PROPS: REGEXP にマッチしたキューに設定するプロパティ
+* PROPERTIES: REGEXP にマッチしたキューに設定するプロパティ
 
-#### PUT /props
+#### PUT /properties
 * 概要: デフォルトプロパティを設定する。既存の設定があれば上書きされる
-* リクエストボディ: `GET /props` のレスポンスと同様
+* リクエストボディ: `GET /properties` のレスポンスと同様
 * レスポンスコード: `204 No Content`
 
-#### DELETE /props
+#### DELETE /properties
 * 概要: デフォルトプロパティを初期化する
 * レスポンスコード: `204 No Content`
 
-#### GET /props/:name
+#### GET /properties/:name
 * 概要: キューのプロパティを取得する
 * パラメータ:
     * name: キュー名
@@ -291,7 +291,7 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
 
 詳細は[キューのプロパティ](#properties)を参照
 
-#### PATCH /props/:name
+#### PATCH /properties/:name
 * 概要: キューのプロパティを部分的に更新する。指定しなかったプロパティは既存の値を踏襲する
 * パラメータ:
     * name: キュー名
@@ -307,7 +307,7 @@ LMQ は HTTP インタフェースを 9980 番ポートで提供しています�
 
 * レスポンスコード: `204 No Content`
 
-#### DELETE /props/:name
+#### DELETE /properties/:name
 * 概要: キューのプロパティを初期化する
 * パラメータ:
     * name: キュー名
