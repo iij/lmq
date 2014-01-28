@@ -30,12 +30,12 @@ stop(_State) ->
 
 start_cowboy({Ip, Port}) ->
     Dispatch = cowboy_router:compile([
-        {'_', [{"/msgs", lmq_cow_msg, [multi]},
-               {"/msgs/:name", lmq_cow_msg, []},
-               {"/msgs/:name/:id", lmq_cow_reply, []},
+        {'_', [{"/messages", lmq_cow_msg, [multi]},
+               {"/messages/:name", lmq_cow_msg, []},
+               {"/messages/:name/:id", lmq_cow_reply, []},
                {"/queues/:name", lmq_cow_queue, []},
-               {"/props", lmq_cow_prop, []},
-               {"/props/:name", lmq_cow_prop, []}
+               {"/properties", lmq_cow_prop, []},
+               {"/properties/:name", lmq_cow_prop, []}
               ]}
     ]),
 
