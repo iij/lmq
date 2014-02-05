@@ -22,8 +22,14 @@ register_test_() ->
      {"Hooks can be configured separately per queue",
       ?setup(fun configured_per_queue/1)},
      {"Registering never crashes and simply aborts",
-      ?setup(fun abort_registering/1)}
+      ?setup(fun abort_registering/1)},
+     {"Unregistering never crashes",
+      ?setup(fun unregistering_never_crash/1)}
     ].
+
+call_test_() ->
+    [{"Calling never crashes",
+     ?setup(fun call_never_crash/1)}].
 
 %% ==================================================================
 %% setup functions
@@ -91,6 +97,7 @@ abort_registering(_) ->
     Config2 = [{custom_hook, [{lmq_hook_sample2, [1]}]}],
     Config3 = [{custom_hook, [{lmq_hook_no_exist, [1]}]}],
     Config4 = [{custom_hook, [{lmq_hook_invalid, [1]}]}],
+    Config5 = [{invalid_hook, [{lmq_hook_sample1, [1]}]}],
     Res = [lmq_hook:register(hook_test, Config1),
            lmq_hook:call(hook_test, custom_hook, 2),
            lmq_hook:register(hook_test, Config2),
@@ -98,5 +105,26 @@ abort_registering(_) ->
            lmq_hook:register(hook_test, Config3),
            lmq_hook:call(hook_test, custom_hook, 2),
            lmq_hook:register(hook_test, Config4),
-           lmq_hook:call(hook_test, custom_hook, 2)],
-    [?_assertEqual([ok, 3, {error, bad_config}, 3, {error, bad_hook}, 3, {error, bad_hook}, 3], Res)].
+           lmq_hook:call(hook_test, custom_hook, 2),
+           lmq_hook:register(hook_test, Config5),
+           lmq_hook:call(hook_test, custom_hook, 2),
+           lmq_hook:call(hook_test, invalid_hook, 2)],
+    [?_assertEqual([ok, 3,
+                    {error, bad_config}, 3,
+                    {error, bad_hook}, 3,
+                    {error, bad_hook}, 3,
+                    {error, bad_config}, 3, 2], Res)].
+
+unregistering_never_crash(_) ->
+    Config1 = [{hook1, [{lmq_hook_crash, [2]}]}],
+    Config2 = [{hook1, []}],
+    Res = [lmq_hook:register(hook_test, Config1),
+           lmq_hook:register(hook_test, Config2)],
+    [?_assertEqual([ok, ok], Res)].
+
+call_never_crash(_) ->
+    Config = [{hook1, [{lmq_hook_crash, [2]}]}],
+    ok = lmq_hook:register(hook_test, Config),
+    [?_assertEqual(1.0, lmq_hook:call(hook_test, hook1, 2)),
+     ?_assertEqual(0, lmq_hook:call(hook_test, hook1, 0)),
+     ?_assertEqual(1, lmq_hook:call(hook_test, hook2, 1))].
