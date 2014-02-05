@@ -37,10 +37,11 @@ init({_, Req}, State) ->
 handle(Req, #state{queue=Queue, push=Push}=State) ->
     {ok, Content, Req2} = cowboy_req:body(Req),
     {CT, Req3} = cowboy_req:header(<<"content-type">>, Req2),
-    Res = export_push_resp(case CT of
-        undefined -> lmq:Push(Queue, Content);
-        _ -> lmq:Push(Queue, [{<<"content-type">>, CT}], Content)
-    end),
+    MD = case CT of
+             undefined -> [];
+             _ -> [{<<"content-type">>, CT}]
+         end,
+    Res = export_push_resp(do_push(Push, Queue, MD, Content, Req3)),
     Res2 = jsonx:encode(Res),
     {ok, Req4} = cowboy_req:reply(200,
         [{<<"content-type">>, <<"application/json">>}], Res2, Req3),
@@ -73,6 +74,18 @@ terminate({error, _}, _Req, _State) ->
 %% ==================================================================
 %% Private functions
 %% ==================================================================
+do_push(push, Queue, MD, Content, Req) when is_binary(Queue) ->
+    do_push(push, binary_to_atom(Queue, latin1), MD, Content, Req);
+do_push(push, Queue, MD, Content, Req) ->
+    {MD2, Content2, _} = lmq_hook:call(Queue, pre_http_push, {MD, Content, Req}),
+    lmq:push(Queue, MD2, Content2);
+do_push(push_all, Regexp, MD, Content, Req) ->
+    case lmq_queue_mgr:match(Regexp) of
+        {error, _}=R ->
+            R;
+        Queues ->
+            {ok, [{Name, do_push(push, Name, MD, Content, Req)} || {Name, _} <- Queues]}
+    end.
 
 export_push_resp({ok, L}) when is_list(L) ->
     {[{N, export_push_resp(R)} || {N, R} <- L]};
