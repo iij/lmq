@@ -69,6 +69,8 @@ handle_call({register, Queue, Config}, _From, #state{loaded_hooks=LoadedHooks,
                                             queue_hooks=dict:store(Queue, Hooks2, QueueHooks)}}
             catch
                 error:function_clause ->
+                    {reply, {error, bad_config}, State#state{loaded_hooks=LoadedHooks2}};
+                error:not_hookable ->
                     {reply, {error, bad_config}, State#state{loaded_hooks=LoadedHooks2}}
             end
     catch
@@ -79,7 +81,9 @@ handle_call({call, Queue, HookName, Value}, _From, #state{queue_hooks=QueueHooks
     Value2 = case dict:find(Queue, QueueHooks) of
                  {ok, Hooks} ->
                      lists:foldl(fun({Module, S}, Acc) ->
-                                         Module:HookName(Acc, S)
+                                         try Module:HookName(Acc, S)
+                                         catch _:_ -> Acc
+                                         end
                                  end, Value, proplists:get_value(HookName, Hooks, []));
                  error ->
                      Value
@@ -122,10 +126,15 @@ update_hooks([], Acc) ->
     Acc;
 update_hooks([{HookName, Modules}|T], Acc) ->
     Creater = fun({Module, Args}) ->
-                      {ok, State} = Module:activate(Args),
-                      {Module, State}
+                      case lists:member(HookName, Module:hooks()) of
+                          true ->
+                              {ok, State} = Module:activate(Args),
+                              {Module, State};
+                          false ->
+                              erlang:error(not_hookable)
+                      end
               end,
-    Remover = fun({Module, State}) -> Module:deactivate(State) end,
+    Remover = fun({Module, State}) -> catch Module:deactivate(State) end,
     Hooks = proplists:get_value(HookName, Acc, []),
     Hooks2 = sort_same_order(Hooks, Modules, Creater, Remover),
     update_hooks(T, lists:keystore(HookName, 1, Acc, {HookName, Hooks2})).
