@@ -1,4 +1,3 @@
-
 -module(lmq_sup).
 
 -behaviour(supervisor).
@@ -27,4 +26,5 @@ init([]) ->
     {ok, {{one_for_all, 5, 10},
           [?CHILD(lmq_queue_supersup, supervisor),
            ?CHILD(lmq_mpull_sup, supervisor),
-           ?CHILD(lmq_event, worker)]}}.
+           ?CHILD(lmq_event, worker),
+           ?CHILD(lmq_hook, worker)]}}.
