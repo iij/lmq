@@ -24,18 +24,21 @@ end_per_suite(_Config) ->
 
 init_per_testcase(auto_load, Config) ->
     {ok, _} = lmq_event:start_link(),
+    {ok, _} = lmq_hook:start_link(),
     Config;
 
 init_per_testcase(_, Config) ->
     {ok, _} = lmq_event:start_link(),
+    {ok, _} = lmq_hook:start_link(),
     {ok, _} = lmq_queue_supersup:start_link(),
     Config.
 
 end_per_testcase(auto_load, _Config) ->
+    lmq_hook:stop(),
     mnesia:transaction(fun() -> mnesia:delete({?LMQ_INFO_TABLE, default_props}) end);
 
 end_per_testcase(_, _Config) ->
-    ok.
+    lmq_hook:stop().
 
 multi_queue(_Config) ->
     Q1 = lmq_queue_mgr:get(q1, [create]),

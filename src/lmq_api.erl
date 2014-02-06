@@ -150,19 +150,45 @@ normalize_props([{<<"retry">>, N} | T], Acc) when is_integer(N) ->
     normalize_props(T, [{retry, N} | Acc]);
 normalize_props([{<<"timeout">>, N} | T], Acc) when is_number(N) ->
     normalize_props(T, [{timeout, N} | Acc]);
+normalize_props([{<<"hooks">>, {L}} | T], Acc) when is_list(L) ->
+    normalize_props(T, [{hooks, normalize_hooks(L, [])} | Acc]);
 normalize_props([], Acc) ->
     {ok, lists:reverse(Acc)};
 normalize_props(_, _) ->
     {error, invalid}.
 
+normalize_hooks([], Acc) ->
+    lists:reverse(Acc);
+normalize_hooks([{Name, L}|T], Acc) when is_binary(Name), is_list(L) ->
+    Name2 = binary_to_atom(Name, latin1),
+    normalize_hooks(T, [{Name2, normalize_hooks2(L, [])}|Acc]).
+
+normalize_hooks2([], Acc) ->
+    lists:reverse(Acc);
+normalize_hooks2([[Name, L]|T], Acc) when is_binary(Name), is_list(L) ->
+    Name2 = binary_to_existing_atom(Name, latin1),
+    normalize_hooks2(T, [{Name2, L}|Acc]).
+
 export_props([{pack, Duration} | T], Acc) ->
     export_props(T, [{<<"pack">>, Duration / 1000} | Acc]);
 export_props([{accum, Duration} | T], Acc) ->
     export_props(T, [{<<"accum">>, Duration / 1000} | Acc]);
+export_props([{hooks, L} | T], Acc) when is_list(L) ->
+    export_props(T, [{<<"hooks">>, export_hooks(L, [])} | Acc]);
 export_props([{K, V} | T], Acc) ->
     export_props(T, [{atom_to_binary(K, latin1), V} | Acc]);
 export_props([], Acc) ->
     {lists:reverse(Acc)}.
+
+export_hooks([], Acc) ->
+    {lists:reverse(Acc)};
+export_hooks([{Name, L}|T], Acc) when is_atom(Name), is_list(L) ->
+    export_hooks(T, [{atom_to_binary(Name, latin1), export_hooks2(L, [])}|Acc]).
+
+export_hooks2([], Acc) ->
+    lists:reverse(Acc);
+export_hooks2([{Name, L}|T], Acc) when is_atom(Name), is_list(L) ->
+    export_hooks2(T, [[atom_to_binary(Name, latin1), L]|Acc]).
 
 normalize_default_props([[Regexp, Props]|T], Acc) when is_binary(Regexp) ->
     case normalize_props(Props) of
@@ -211,6 +237,10 @@ normalize_props_test() ->
     ?assertEqual({ok, [{retry, 2}, {timeout, 5.0}, {pack, 500}]},
                  normalize_props({[{<<"retry">>, 2}, {<<"timeout">>, 5.0},
                                    {<<"pack">>, 0.5}]})),
+    ?assertEqual({ok, [{hooks, [{hook_point, [{hook_module, [<<"args1">>, <<"args2">>]}]}]}]},
+                 normalize_props({[{<<"hooks">>,
+                                    {[{<<"hook_point">>,
+                                       [[<<"hook_module">>, [<<"args1">>, <<"args2">>]]]}]}}]})),
     ?assertEqual({error, invalid},
                  normalize_props({[{<<"retry">>, <<"3">>}, {<<"timeout">>, <<"5.0">>},
                                    {<<"pack">>, <<"1">>}]})),
@@ -218,12 +248,21 @@ normalize_props_test() ->
 
 export_props_test() ->
     ?assertEqual({[{<<"retry">>, 3}, {<<"timeout">>, 5.0}, {<<"pack">>, 0.5}]},
-                 export_props([{retry, 3}, {timeout, 5.0}, {pack, 500}])).
+                 export_props([{retry, 3}, {timeout, 5.0}, {pack, 500}])),
+    ?assertEqual({[{<<"hooks">>,
+                    {[{<<"hook_point">>,
+                       [[<<"hook_module">>, [<<"args1">>, <<"args2">>]]]}]}}]},
+                 export_props([{hooks, [{hook_point, [{hook_module, [<<"args1">>, <<"args2">>]}]}]}])).
 
 normalize_default_props_test() ->
     ?assertEqual({ok, [{<<"lmq">>, [{pack, 1000}]}, {<<"def">>, [{retry, 0}]}]},
                  normalize_default_props([[<<"lmq">>, {[{<<"pack">>, 1}]}],
                                           [<<"def">>, {[{<<"retry">>, 0}]}]])),
+    ?assertEqual({ok, [{<<"lmq">>, [{hooks, [{hook_point, [{hook_module, [<<"args1">>, <<"args2">>]}]}]}]}]},
+                 normalize_default_props([[<<"lmq">>,
+                                           {[{<<"hooks">>,
+                                              {[{<<"hook_point">>,
+                                                 [[<<"hook_module">>, [<<"args1">>, <<"args2">>]]]}]}}]}]])),
     ?assertEqual({error, invalid},
                  normalize_default_props([[<<"lmq">>, {[{<<"pack">>, <<"1">>}]}]])),
     ?assertEqual({error, invalid}, normalize_default_props([<<"lmq">>])).
@@ -232,7 +271,13 @@ export_default_props_test() ->
     ?assertEqual([[<<"lmq">>, {[{<<"pack">>, 1.0}]}],
                   [<<"def">>, {[{<<"retry">>, 0}]}]],
                  export_default_props([{<<"lmq">>, [{pack, 1000}]},
-                                       {<<"def">>, [{retry, 0}]}])).
+                                       {<<"def">>, [{retry, 0}]}])),
+    ?assertEqual([[<<"lmq">>,
+                   {[{<<"hooks">>,
+                      {[{<<"hook_point">>,
+                         [[<<"hook_module">>, [<<"args1">>, <<"args2">>]]]}]}}]}]],
+                export_default_props([{<<"lmq">>,
+                                       [{hooks, [{hook_point, [{hook_module, [<<"args1">>, <<"args2">>]}]}]}]}])).
 
 export_message_test() ->
     Ref = make_ref(),

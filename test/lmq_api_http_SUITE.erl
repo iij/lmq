@@ -138,11 +138,17 @@ queue_props(Config) ->
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], delete),
     {ok, "200", ResHdr2, ResBody2} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
-    "{\"accum\":0,\"retry\":2,\"timeout\":30}" = ResBody2.
+    "{\"accum\":0,\"retry\":2,\"timeout\":30}" = ResBody2,
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
+        "{\"hooks\":{\"pre_http_push\":[[\"lmq_hook_preserve_header\",[\"user-agent\"]]]}}"),
+    {ok, "200", _, ResBody3} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
+    "{\"accum\":0,\"hooks\":{\"pre_http_push\":[[\"lmq_hook_preserve_header\",[\"user-agent\"]]]},\"retry\":2,\"timeout\":30}" = ResBody3.
 
 default_props(Config) ->
     Name = ?config(qname, Config),
     PropList = "[[\"accum/.*\",{\"accum\":30}],[\".*\",{\"retry\":0}]]",
+    PropList2 = "[[\"hook/.*\",{\"hooks\":{\"pre_http_push\":[[\"lmq_hook_preserve_header\",[\"user-agent\"]]]}}]]",
     {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
 
@@ -151,11 +157,20 @@ default_props(Config) ->
     {ok, "200", ResHdr2, PropList} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr2),
 
+    {ok, "200", _, "{\"accum\":30,\"retry\":2,\"timeout\":30}"} =
+        ibrowse:send_req(?URL_QUEUE_PROPS("accum%2fa"), [], get),
     {ok, "200", _, "{\"accum\":0,\"retry\":0,\"timeout\":30}"} =
         ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], delete),
-    {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get).
+    {ok, "200", ResHdr, "[]"} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
+    {ok, "200", _, "{\"accum\":0,\"retry\":2,\"timeout\":30}"} =
+        ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
+
+    {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [?CT_JSON], put, PropList2),
+    {ok, "200", _, PropList2} = ibrowse:send_req(?URL_QUEUE_PROPS(""), [], get),
+    {ok, "200", _, P} = ibrowse:send_req(?URL_QUEUE_PROPS("hook%2fa"), [], get),
+    "{\"accum\":0,\"hooks\":{\"pre_http_push\":[[\"lmq_hook_preserve_header\",[\"user-agent\"]]]},\"retry\":2,\"timeout\":30}" = P.
 
 multi(_Config) ->
     Names = ["multi%2fa", "multi%2fb"],

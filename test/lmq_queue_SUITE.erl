@@ -6,11 +6,12 @@
     init_per_testcase/2, end_per_testcase/2,
     all/0, groups/0]).
 -export([init/1, push_pull_done/1, release/1, release_multi/1, multi_queue/1,
-    pull_timeout/1, async_request/1, pull_async/1, pull_and_timeout/1]).
+         pull_timeout/1, async_request/1, pull_async/1, pull_and_timeout/1,
+         update_properties/1, reload_properties/1]).
 
 all() ->
     [init, push_pull_done, release, release_multi, multi_queue, pull_timeout,
-    async_request, pull_async, {group, timing}].
+    async_request, pull_async, update_properties, reload_properties, {group, timing}].
 
 groups() ->
     [{timing, [{repeat_until_any_fail, 10}], [pull_and_timeout]}].
@@ -30,17 +31,20 @@ end_per_suite(_Config) ->
 
 init_per_testcase(init, Config) ->
     {ok, _} = lmq_event:start_link(),
+    {ok, _} = lmq_hook:start_link(),
     Config;
 
 init_per_testcase(_, Config) ->
     {ok, _} = lmq_event:start_link(),
+    {ok, _} = lmq_hook:start_link(),
     {ok, Pid} = lmq_queue:start_link(message),
     [{queue, Pid} | Config].
 
 end_per_testcase(init, _Config) ->
-    ok;
+    lmq_hook:stop();
 end_per_testcase(_, Config) ->
     lmq_queue:stop(?config(queue, Config)),
+    lmq_hook:stop(),
     lmq_lib:delete(message).
 
 init(_Config) ->
@@ -59,7 +63,16 @@ init(_Config) ->
     {ok, Q3} = lmq_queue:start_link(queue_test_1),
     [{timeout, 10}] = lmq_lib:queue_info(queue_test_1),
     P2 = lmq_queue:get_properties(Q3),
-    lmq_queue:stop(Q3).
+    lmq_queue:stop(Q3),
+
+    Props = [{hooks, [{custom_hook, [{lmq_hook_sample1, [1]}]}]}],
+    1 = lmq_hook:call(queue_test_1, custom_hook, 1),
+    {ok, Q4} = lmq_queue:start_link(queue_test_1,  Props),
+    Props = lmq_lib:queue_info(queue_test_1),
+    P3 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
+    P3 = lmq_queue:get_properties(Q4),
+    2 = lmq_hook:call(queue_test_1, custom_hook, 1),
+    lmq_queue:stop(Q4).
 
 push_pull_done(Config) ->
     Pid = ?config(queue, Config),
@@ -203,3 +216,35 @@ wait_pull_and_timeout(Ref, N) ->
     receive {Ref, empty} -> wait_pull_and_timeout(Ref, N-1)
     after 200 -> ct:fail(no_response)
     end.
+
+update_properties(Config) ->
+    Q = ?config(queue, Config),
+    Props1 = [{timeout, 1}],
+    Props2 = [{hooks, [{custom_hook, [{lmq_hook_sample1, [1]}]}]}],
+    [] = lmq_lib:queue_info(message),
+    ?DEFAULT_QUEUE_PROPS = lmq_queue:get_properties(Q),
+    lmq_queue:props(Q, Props1),
+    true = lmq_misc:extend(Props1, ?DEFAULT_QUEUE_PROPS) =:= lmq_queue:get_properties(Q),
+    Props1 = lmq_lib:queue_info(message),
+    1 = lmq_hook:call(message, custom_hook, 1),
+    lmq_queue:props(Q, Props2),
+    true = lmq_misc:extend(Props2, ?DEFAULT_QUEUE_PROPS) =:= lmq_queue:get_properties(Q),
+    Props2 = lmq_lib:queue_info(message),
+    2 = lmq_hook:call(message, custom_hook, 1).
+
+reload_properties(Config) ->
+    Q = ?config(queue, Config),
+    Props1 = [{timeout, 1}],
+    Props2 = [{hooks, [{custom_hook, [{lmq_hook_sample1, [1]}]}]}],
+    [] = lmq_lib:queue_info(message),
+    ?DEFAULT_QUEUE_PROPS = lmq_queue:get_properties(Q),
+    lmq_lib:update_queue_props(message, Props1),
+    lmq_queue:reload_properties(Q),
+    true = lmq_misc:extend(Props1, ?DEFAULT_QUEUE_PROPS) =:= lmq_queue:get_properties(Q),
+    Props1 = lmq_lib:queue_info(message),
+    1 = lmq_hook:call(message, custom_hook, 1),
+    lmq_lib:update_queue_props(message, Props2),
+    lmq_queue:reload_properties(Q),
+    true = lmq_misc:extend(Props2, ?DEFAULT_QUEUE_PROPS) =:= lmq_queue:get_properties(Q),
+    Props2 = lmq_lib:queue_info(message),
+    2 = lmq_hook:call(message, custom_hook, 1).
