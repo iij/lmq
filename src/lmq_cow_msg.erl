@@ -51,15 +51,13 @@ info({Ref, empty}, Req, #state{ref=Ref}=State) ->
     {ok, Req2} = cowboy_req:reply(204, Req),
     {ok, Req2, State};
 info({Ref, Msg}, Req, #state{ref=Ref, cf=CF}=State) ->
-    {CT, V} = encode_body(proplists:get_value(type, Msg), CF, Msg),
-    {ok, Req2} = cowboy_req:reply(200,
-        [{<<"content-type">>, CT},
-         {<<"x-lmq-queue-name">>, atom_to_binary(
-            proplists:get_value(queue, Msg), latin1)},
-         {<<"x-lmq-message-id">>, proplists:get_value(id, Msg)},
-         {<<"x-lmq-message-type">>, atom_to_binary(
-            proplists:get_value(type, Msg), latin1)}
-        ], V, Req),
+    {Hdrs, V} = encode_body(proplists:get_value(type, Msg), CF, Msg),
+    Hdrs2 = Hdrs ++ [{<<"x-lmq-queue-name">>,
+                      atom_to_binary(proplists:get_value(queue, Msg), latin1)},
+                     {<<"x-lmq-message-id">>, proplists:get_value(id, Msg)},
+                     {<<"x-lmq-message-type">>,
+                      atom_to_binary(proplists:get_value(type, Msg), latin1)}],
+    {ok, Req2} = cowboy_req:reply(200, Hdrs2, V, Req),
     {ok, Req2, State};
 info(_Msg, Req, State) ->
     {loop, Req, State}.
@@ -146,15 +144,22 @@ validate_compound_format(Req) ->
 
 encode_body(normal, _, Msg) ->
     {MD, V} = proplists:get_value(content, Msg),
-    CT = proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
-    {CT, V};
+    {make_headers(MD), V};
 encode_body(compound, multipart, Msg) ->
     Boundary = proplists:get_value(id, Msg),
+    Hdrs = [{<<"content-type">>, <<"multipart/mixed; boundary=", Boundary/binary>>}],
     V = to_multipart(Boundary, proplists:get_value(content, Msg)),
-    {<<"multipart/mixed; boundary=", Boundary/binary>>, V};
+    {Hdrs, V};
 encode_body(compound, msgpack, Msg) ->
-    V = [[{stringify_metadata(MD)}, V] || {MD, V} <- proplists:get_value(content, Msg)],
-    {<<"application/x-msgpack">>, msgpack:pack(V, [{enable_str, true}])}.
+    Hdrs = [{<<"content-type">>, <<"application/x-msgpack">>}],
+    V = [[{stringify_metadata(make_headers(MD))}, V] || {MD, V} <- proplists:get_value(content, Msg)],
+    {Hdrs, msgpack:pack(V, [{enable_str, true}])}.
+
+make_headers(MD) ->
+    case proplists:is_defined(<<"content-type">>, MD) of
+        true -> MD;
+        false -> [{<<"content-type">>, <<"application/octet-stream">>}|MD]
+    end.
 
 to_multipart(Boundary, Contents) when is_list(Contents) ->
     [[[<<"\r\n--">>, Boundary, <<"\r\n">>, encode_multipart_item(C)]
@@ -162,10 +167,9 @@ to_multipart(Boundary, Contents) when is_list(Contents) ->
      <<"\r\n--">>, Boundary, <<"--\r\n">>].
 
 encode_multipart_item({MD, V}) ->
-    [<<"Content-Type: ">>,
-     proplists:get_value(<<"content-type">>, MD, <<"application/octet-stream">>),
-     <<"\r\n">>,
-     <<"Content-Transfer-Encoding: binary\r\n">>,
+    Hdrs = make_headers(MD),
+    [[[Key, <<": ">>, Value, <<"\r\n">>] || {Key, Value} <- Hdrs],
+     <<"content-transfer-encoding: binary\r\n">>,
      <<"\r\n">>, V].
 
 stringify_metadata(MD) ->
@@ -175,3 +179,61 @@ stringify_metadata([{K, V}|Tail], Acc) when is_binary(K), is_binary(V) ->
     stringify_metadata(Tail, [{binary_to_list(K), binary_to_list(V)}|Acc]);
 stringify_metadata([], Acc) ->
     lists:reverse(Acc).
+
+%% ==================================================================
+%% EUnit test
+%% ==================================================================
+-ifdef(TEST).
+-include_lib("eunit/include/eunit.hrl").
+
+encode_body_normal_test_() ->
+    Msg1 = [{id, <<"id1">>}, {content, {[{<<"content-type">>, <<"text/plain">>}], <<"msg1">>}}],
+    Msg2 = [{id, <<"id2">>}, {content, {[], <<"msg2">>}}],
+    Msg3 = [{id, <<"id3">>}, {content, {[{<<"x-lmq-sequence">>, <<"1">>}], <<"msg3">>}}],
+    [?_assertEqual({[{<<"content-type">>, <<"text/plain">>}], <<"msg1">>},
+                   encode_body(normal, multipart, Msg1)),
+     ?_assertEqual({[{<<"content-type">>, <<"application/octet-stream">>}], <<"msg2">>},
+                   encode_body(normal, multipart, Msg2)),
+     ?_assertEqual({[{<<"content-type">>, <<"application/octet-stream">>},
+                     {<<"x-lmq-sequence">>, <<"1">>}], <<"msg3">>},
+                   encode_body(normal, multipart, Msg3))].
+
+encode_body_multipart_test_() ->
+    Msg1 = [{id, <<"id1">>}, {content, [{[{<<"content-type">>, <<"text/plain">>}], <<"msg1">>},
+                                        {[], <<"msg2">>},
+                                        {[{<<"x-lmq-sequence">>, <<"1">>}], <<"msg3">>}]}],
+    [?_assertEqual([{<<"content-type">>, <<"multipart/mixed; boundary=id1">>}],
+                   element(1, encode_body(compound, multipart, Msg1))),
+     ?_assertEqual(<<"\r\n--id1\r\n",
+                     "content-type: text/plain\r\n",
+                     "content-transfer-encoding: binary\r\n",
+                     "\r\n",
+                     "msg1"
+                     "\r\n--id1\r\n",
+                     "content-type: application/octet-stream\r\n",
+                     "content-transfer-encoding: binary\r\n",
+                     "\r\n",
+                     "msg2",
+                     "\r\n--id1\r\n",
+                     "content-type: application/octet-stream\r\n",
+                     "x-lmq-sequence: 1\r\n",
+                     "content-transfer-encoding: binary\r\n",
+                     "\r\n",
+                     "msg3",
+                     "\r\n--id1--\r\n">>,
+                   iolist_to_binary(element(2, encode_body(compound, multipart, Msg1))))
+    ].
+
+encode_body_msgpack_test_() ->
+    Msg1 = [{id, <<"id1">>}, {content, [{[{<<"content-type">>, <<"text/plain">>}], <<"msg1">>},
+                                        {[], <<"msg2">>},
+                                        {[{<<"x-lmq-sequence">>, <<"1">>}], <<"msg3">>}]}],
+    Bin1 = msgpack:pack([[{[{"content-type", "text/plain"}]}, <<"msg1">>],
+                         [{[{"content-type", "application/octet-stream"}]}, <<"msg2">>],
+                         [{[{"content-type", "application/octet-stream"},
+                            {"x-lmq-sequence", "1"}]}, <<"msg3">>]],
+                        [{enable_str, true}]),
+    [?_assertEqual({[{<<"content-type">>, <<"application/x-msgpack">>}], Bin1},
+                   encode_body(compound, msgpack, Msg1))].
+
+-endif.
