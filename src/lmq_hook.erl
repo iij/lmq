@@ -77,18 +77,22 @@ handle_call({register, Queue, Config}, _From, #state{loaded_hooks=LoadedHooks,
         error:undef ->
             {reply, {error, bad_hook}, State}
     end;
-handle_call({call, Queue, HookName, Value}, _From, #state{queue_hooks=QueueHooks}=State) ->
-    Value2 = case dict:find(Queue, QueueHooks) of
-                 {ok, Hooks} ->
-                     lists:foldl(fun({Module, S}, Acc) ->
-                                         try Module:HookName(Acc, S)
-                                         catch _:_ -> Acc
-                                         end
-                                 end, Value, proplists:get_value(HookName, Hooks, []));
-                 error ->
-                     Value
-             end,
-    {reply, Value2, State};
+handle_call({call, Queue, HookName, Value}, From, #state{queue_hooks=QueueHooks}=State) ->
+    case dict:find(Queue, QueueHooks) of
+        {ok, Hooks} ->
+            F = fun() ->
+                        R = lists:foldl(fun({Module, S}, Acc) ->
+                                                try Module:HookName(Acc, S)
+                                                catch _:_ -> Acc
+                                                end
+                                        end, Value, proplists:get_value(HookName, Hooks, [])),
+                        gen_server:reply(From, R)
+                end,
+            spawn_link(F),
+            {noreply, State};
+        error ->
+            {reply, Value, State}
+    end;
 handle_call(stop, _From, State) ->
     {stop, normal, ok, State}.
 
