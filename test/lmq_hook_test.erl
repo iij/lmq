@@ -24,7 +24,9 @@ register_test_() ->
      {"Registering never crashes and simply aborts",
       ?setup(fun abort_registering/1)},
      {"Unregistering never crashes",
-      ?setup(fun unregistering_never_crash/1)}
+      ?setup(fun unregistering_never_crash/1)},
+     {"Hooks not included in new config are unregistered",
+      ?setup(fun automatic_unregister/1)}
     ].
 
 call_test_() ->
@@ -121,6 +123,17 @@ unregistering_never_crash(_) ->
     Res = [lmq_hook:register(hook_test, Config1),
            lmq_hook:register(hook_test, Config2)],
     [?_assertEqual([ok, ok], Res)].
+
+automatic_unregister(_) ->
+    Config1 = [{custom_hook, [{lmq_hook_sample1, [1]}]}],
+    Config2 = [{custom_hook2, [{lmq_hook_sample2, [1, 2]}]}],
+    Res = [lmq_hook:register(hook_test, Config1),
+           lmq_hook:call(hook_test, custom_hook, 2),
+           lmq_hook:call(hook_test, custom_hook2, 2),
+           lmq_hook:register(hook_test, Config2),
+           lmq_hook:call(hook_test, custom_hook, 2),
+           lmq_hook:call(hook_test, custom_hook2, 2)],
+    [?_assertEqual([ok, 3, 2, ok, 2, 4], Res)].
 
 call_never_crash(_) ->
     Config = [{hook1, [{lmq_hook_crash, [2]}]}],

@@ -63,7 +63,7 @@ handle_call({register, Queue, Config}, _From, #state{loaded_hooks=LoadedHooks,
                         {ok, V} -> V;
                         error -> []
                     end,
-            try update_hooks(Config, Hooks) of
+            try update_hooks(Hooks, Config) of
                 Hooks2 ->
                     {reply, ok, State#state{loaded_hooks=LoadedHooks2,
                                             queue_hooks=dict:store(Queue, Hooks2, QueueHooks)}}
@@ -122,9 +122,17 @@ maybe_init_hook(Module, Hooks) ->
             [Module|Hooks]
     end.
 
-update_hooks([], Acc) ->
-    Acc;
-update_hooks([{HookName, Modules}|T], Acc) ->
+update_hooks(OldHooks, Config) ->
+    update_hooks(OldHooks, Config, []).
+
+update_hooks([], [], Acc) ->
+    lists:reverse(Acc);
+update_hooks([{_, Modules}|T], [], Acc) ->
+    lists:foreach(fun({Module, State}) ->
+                          catch Module:deactivate(State)
+                  end, Modules),
+    update_hooks(T, [], Acc);
+update_hooks(OldHooks, [{HookName, Modules}|T], Acc) ->
     Creater = fun({Module, Args}) ->
                       case lists:member(HookName, Module:hooks()) of
                           true ->
@@ -135,9 +143,10 @@ update_hooks([{HookName, Modules}|T], Acc) ->
                       end
               end,
     Remover = fun({Module, State}) -> catch Module:deactivate(State) end,
-    Hooks = proplists:get_value(HookName, Acc, []),
+    Hooks = proplists:get_value(HookName, OldHooks, []),
     Hooks2 = sort_same_order(Hooks, Modules, Creater, Remover),
-    update_hooks(T, lists:keystore(HookName, 1, Acc, {HookName, Hooks2})).
+    OldHooks2 = proplists:delete(HookName, OldHooks),
+    update_hooks(OldHooks2, T, [{HookName, Hooks2}|Acc]).
 
 sort_same_order(List, Guide, Creater, Remover) ->
     sort_same_order(List, Guide, [], Creater, Remover).
