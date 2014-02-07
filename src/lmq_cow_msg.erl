@@ -107,9 +107,15 @@ validate_timeout(Req) ->
             {ok, infinity, Req2};
         {V, Req2} ->
             case lmq_misc:btof(V) of
-                {ok, 0.0} -> {ok, 0, Req2};
-                {ok, T} -> {ok, T, Req2};
-                {error, _} -> {error, Req2}
+                {ok, 0.0} ->
+                    {ok, 0, Req2};
+                {ok, T} ->
+                    case cowboy_req:qs_val(<<"qre">>, Req2) of
+                        {undefined, Req3} -> {ok, T, Req3};
+                        {_, Req3} -> {ok, round(T * 1000), Req3}
+                    end;
+                {error, _} ->
+                    {error, Req2}
             end
     end.
 

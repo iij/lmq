@@ -192,7 +192,7 @@ multi(_Config) ->
     {ok, "200", _, Content} = ibrowse:send_req(
         ?URL_MULTI(Regexp) ++ "&t=0", [], get),
     {ok, "200", _, Content} = ibrowse:send_req(
-        ?URL_MULTI(Regexp) ++ "&t=0", [], get),
+        ?URL_MULTI(Regexp) ++ "&t=1", [], get),
     {ok, "204", _, _} = ibrowse:send_req(
         ?URL_MULTI(Regexp) ++ "&t=0", [], get).
 
