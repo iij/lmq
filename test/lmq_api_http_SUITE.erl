@@ -192,7 +192,7 @@ multi(_Config) ->
     {ok, "200", _, Content} = ibrowse:send_req(
         ?URL_MULTI(Regexp) ++ "&t=0", [], get),
     {ok, "200", _, Content} = ibrowse:send_req(
-        ?URL_MULTI(Regexp) ++ "&t=0", [], get),
+        ?URL_MULTI(Regexp) ++ "&t=1", [], get),
     {ok, "204", _, _} = ibrowse:send_req(
         ?URL_MULTI(Regexp) ++ "&t=0", [], get).
 
@@ -216,14 +216,12 @@ compound(Config) ->
     true = "multipart/mixed; boundary=" ++ MsgId
         =:= proplists:get_value("content-type", ResHdr),
 
-    F0 = cowboy_multipart:parser(list_to_binary(MsgId)),
-    {headers, [{<<"content-type">>, <<"application/x-msgpack">>}, ?CTE], F1} = F0(Body),
-    {body, C1, F2} = F1(),
-    {end_of_part, F3} = F2(),
-    {headers, [{<<"content-type">>, <<"application/json">>}, ?CTE], F4} = F3(),
-    {body, C2, F5} = F4(),
-    {end_of_part, F6} = F5(),
-    eof = F6(),
+    Boundary = list_to_binary(MsgId),
+    {ok, [?CTE, {<<"content-type">>, <<"application/x-msgpack">>}], Rest1} = cow_multipart:parse_headers(Body, Boundary),
+    {done, C1, Rest2} = cow_multipart:parse_body(Rest1, Boundary),
+    {ok, [?CTE, {<<"content-type">>, <<"application/json">>}], Rest3} = cow_multipart:parse_headers(Rest2, Boundary),
+    {done, C2, Rest4} = cow_multipart:parse_body(Rest3, Boundary),
+    {done, <<>>} = cow_multipart:parse_headers(Rest4, Boundary),
 
     %% explicit use multipart format
     {ok, "200", ResHdr2, _} = ibrowse:send_req(
