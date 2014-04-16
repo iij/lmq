@@ -14,3 +14,4 @@
     {record_name, queue_info}]).
 
 -define(LMQ_ALL_METRICS, all).
+-define(STATSD_SAMPLERATE, 0.5).
