@@ -23,13 +23,16 @@ create_queue_metrics(Name) when is_atom(Name) ->
     ok.
 
 update_metric(Name, push) when is_atom(Name) ->
-    folsom_metrics:notify({get_metric_name(Name, push), 1});
+    folsom_metrics:notify({get_metric_name(Name, push), 1}),
+    statsderl:increment(statsd_name(Name, push), 1, ?STATSD_SAMPLERATE);
 
 update_metric(Name, pull) when is_atom(Name) ->
-    folsom_metrics:notify({get_metric_name(Name, pull), 1}).
+    folsom_metrics:notify({get_metric_name(Name, pull), 1}),
+    statsderl:increment(statsd_name(Name, pull), 1, ?STATSD_SAMPLERATE).
 
 update_metric(Name, retention, Time) when is_atom(Name) ->
-    folsom_metrics:notify({get_metric_name(Name, retention), Time}).
+    folsom_metrics:notify({get_metric_name(Name, retention), Time}),
+    statsderl:timing(statsd_name(Name, retention), Time, ?STATSD_SAMPLERATE).
 
 get_metric(Name, push) when is_atom(Name) ->
     folsom_metrics:get_metric_value(get_metric_name(Name, push));
@@ -59,6 +62,9 @@ get_metric_name(Name, Type) when is_binary(Name), is_binary(Type) ->
 %% EUnit tests
 %% ==================================================================
 
+statsd_name(Name, Action) ->
+    lists:flatten(io_lib:format("lmq.~s.~s", [Name, Action])).
+
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
 
@@ -66,5 +72,9 @@ get_metric_name_test() ->
     ?assertEqual(<<"foo_push">>, get_metric_name(foo, push)),
     ?assertEqual(<<"foo_pull">>, get_metric_name(foo, pull)),
     ?assertEqual(<<"foo_retention">>, get_metric_name(foo, retention)).
+
+statsd_name_test() ->
+    ?assertEqual("lmq.queue.push", statsd_name(queue, push)),
+    ?assertEqual("lmq.Q/N.push", statsd_name('Q/N', push)).
 
 -endif.

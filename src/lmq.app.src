@@ -16,7 +16,8 @@
                   jsonx,
                   msgpack,
                   msgpack_rpc,
-                  folsom
+                  folsom,
+                  statsderl
                  ]},
   {mod, { lmq_app, []}},
   {env, [

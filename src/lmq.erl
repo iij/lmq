@@ -9,7 +9,7 @@
     status/0, queue_status/1, stats/0, stats/1]).
 
 -define(DEPS, [lager, crypto, quickrand, uuid, msgpack, msgpack_rpc,
-    mnesia, ranch, cowlib, cowboy, jsonx, folsom, lmq]).
+    mnesia, ranch, cowlib, cowboy, jsonx, folsom, statsderl, lmq]).
 
 %% ==================================================================
 %% Public API
