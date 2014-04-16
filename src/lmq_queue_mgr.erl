@@ -1,21 +1,24 @@
 -module(lmq_queue_mgr).
 
 -behaviour(gen_server).
--export([start_link/0, queue_started/2, delete/1, get/1, get/2, match/1,
+-export([start_link/0, start_link/1, queue_started/2, delete/1, get/1, get/2, match/1,
     set_default_props/1, get_default_props/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
     code_change/3, terminate/2]).
 
 -include("lmq.hrl").
 
--record(state, {sup, qmap=dict:new()}).
+-record(state, {sup, qmap=dict:new(), stats_interval}).
 
 %% ==================================================================
 %% Public API
 %% ==================================================================
 
 start_link() ->
-    gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+    start_link([]).
+
+start_link(Opts) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, Opts, []).
 
 queue_started(Name, QPid) when is_atom(Name) ->
     gen_server:cast(?MODULE, {queue_started, Name, QPid}).
@@ -42,12 +45,15 @@ get_default_props() ->
 %% gen_server callbacks
 %% ==================================================================
 
-init([]) ->
-    lager:info("Starting the queue manager: ~p", [self()]),
+init(Opts) ->
+    lager:info("Starting the queue manager: ~p ~p", [self(), Opts]),
     lists:foreach(fun(Name) ->
         lmq_queue:start(Name)
     end, lmq_lib:all_queue_names()),
-    {ok, #state{}}.
+
+    StatsInterval = proplists:get_value(stats_interval, Opts),
+    maybe_send_after(StatsInterval, emit_stats),
+    {ok, #state{stats_interval=StatsInterval}}.
 
 handle_call({delete, Name}, _From, S=#state{}) when is_atom(Name) ->
     State = case dict:find(Name, S#state.qmap) of
@@ -137,6 +143,17 @@ handle_info({'DOWN', Ref, process, _Pid, _}, S=#state{qmap=QMap}) ->
         R =/= Ref
     end, QMap),
     {noreply, S#state{qmap=NewQMap}};
+handle_info(emit_stats, S=#state{}) ->
+    maybe_send_after(S#state.stats_interval, emit_stats),
+    WordSize = erlang:system_info(wordsize),
+    Queues = dict:fetch_keys(S#state.qmap),
+    lists:foreach(fun(Queue) ->
+                          Size = mnesia:table_info(Queue, size),
+                          Memory = mnesia:table_info(Queue, memory) * WordSize,
+                          lmq_metrics:update_metric(Queue, size, Size),
+                          lmq_metrics:update_metric(Queue, memory, Memory)
+                  end, Queues),
+    {noreply, S};
 handle_info(Msg, State) ->
     lager:warning("Unknown message: ~p", [Msg]),
     {noreply, State}.
@@ -169,6 +186,11 @@ validate_props_list([{Regexp, Props}|T], Acc) when is_list(Regexp); is_binary(Re
     {ok, MP} = re:compile(Regexp),
     Props1 = lmq_misc:extend(Props, ?DEFAULT_QUEUE_PROPS),
     validate_props_list(T, [{MP, Props1} | Acc]).
+
+maybe_send_after(Time, Message) when is_integer(Time) ->
+    erlang:send_after(Time, ?MODULE, Message);
+maybe_send_after(_, _) ->
+    ignore.
 
 %% ==================================================================
 %% EUnit tests

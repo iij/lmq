@@ -32,7 +32,9 @@ update_metric(Name, pull) when is_atom(Name) ->
 
 update_metric(Name, retention, Time) when is_atom(Name) ->
     folsom_metrics:notify({get_metric_name(Name, retention), Time}),
-    statsderl:timing(statsd_name(Name, retention), Time, ?STATSD_SAMPLERATE).
+    statsderl:timing(statsd_name(Name, retention), Time, ?STATSD_SAMPLERATE);
+update_metric(Name, Type, Value) ->
+    statsderl:gauge(statsd_name(Name, Type), Value, 1).
 
 get_metric(Name, push) when is_atom(Name) ->
     folsom_metrics:get_metric_value(get_metric_name(Name, push));
