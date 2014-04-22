@@ -1,7 +1,7 @@
 {application, lmq,
  [
   {description, ""},
-  {vsn, "0.6.3"},
+  {vsn, "0.6.4"},
   {registered, []},
   {applications, [
                   kernel,
@@ -16,11 +16,13 @@
                   jsonx,
                   msgpack,
                   msgpack_rpc,
-                  folsom
+                  folsom,
+                  statsderl
                  ]},
   {mod, { lmq_app, []}},
   {env, [
     {port, 18800},
-    {http, {"0.0.0.0", 9980}}
+    {http, {"0.0.0.0", 9980}},
+    {stats_interval, 0}
   ]}
  ]}.

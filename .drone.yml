@@ -1,0 +1,4 @@
+---
+image: erlangR16B02
+script:
+  - make test

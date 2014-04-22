@@ -147,6 +147,24 @@ LMQ の現在のステータスを表示するには、以下のコマンドを�
 
     $ bin/lmq-admin status
 
+## StatsD / Graphite
+StatsD 経由で Graphite に metrics を送信することができます。デフォルトで localhost:8125 に送るので、別のサーバに送るには `app.config` の以下の項目を変更してください。
+
+```erlang
+{statsderl, [
+  {hostname, "localhost"},
+  {port, 8125}
+]},
+```
+
+また、`stats_interval` を1以上にすると、指定した間隔で各キューのメッセージ数を送信します。単位は ms です。パフォーマンスに影響するため、設定するなら 30,000 程度を推奨します。
+
+```erlang
+{lmq, [
+  {stats_interval, 0}
+]},
+```
+
 ## パフォーマンスチューニング
 高いパフォーマンスが必要な環境では、API のアクセスログを無効化することで 15-30% ほど多くの API リクエストを処理できるようになります。
 
