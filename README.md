@@ -1,4 +1,6 @@
 # LMQ - Lightweight Message Queue
+[![Build Status](https://drone.io/github.com/iij/lmq/status.png)](https://drone.io/github.com/iij/lmq/latest)
+
 LMQ は Erlang 製のメッセージキューです。
 HTTP API を使ってキューに任意のデータを投入し、任意のタイミングで取り出すことができます。
 
