@@ -163,8 +163,9 @@ sort_same_order(List, [], Acc, Creater, Remover) ->
 sort_same_order([], Guide, Acc, Creater, Remover) ->
     Acc2 =lists:foldl(fun(E, A) -> [Creater(E)|A] end, Acc, Guide),
     sort_same_order([], [], Acc2, Creater, Remover);
-sort_same_order([{Key, _}=E|List], [{Key, _}|Guide], Acc, Creater, Remover) ->
-    sort_same_order(List, Guide, [E|Acc], Creater, Remover);
+sort_same_order([{Key, _}=Old|List], [{Key, _}=New|Guide], Acc, Creater, Remover) ->
+    Remover(Old),
+    sort_same_order(List, Guide, [Creater(New)|Acc], Creater, Remover);
 sort_same_order(List, [{Key, _}=E|Guide], Acc, Creater, Remover) ->
     case proplists:get_value(Key, List) of
         undefined ->
@@ -185,6 +186,7 @@ sort_same_order_test_() ->
     R = fun(_) -> ok end,
     [?_assertEqual([{a, 1}, {b, 2}], sort_same_order([], [{a, [1]}, {b, [2]}], C, R)),
      ?_assertEqual([{b, 2}], sort_same_order([{a, 1}, {b, 2}, {c, 3}], [{b, [2]}], C, R)),
+     ?_assertEqual([{b, 3}], sort_same_order([{b, 2}], [{b, [3]}], C, R)),
      ?_assertEqual([{c, 3}, {d, 4}, {a, 1}],
                    sort_same_order([{a, 1}, {b, 2}, {c, 3}], [{c, [3]}, {d, [4]}, {a, [1]}], C, R))].
 
