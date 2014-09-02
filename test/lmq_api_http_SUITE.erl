@@ -129,7 +129,7 @@ queue_props(Config) ->
     Name = ?config(qname, Config),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
         <<"{\"accum\":30,\"retry\":0}">>),
-    {ok, "422", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
+    {ok, "400", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [?CT_JSON], patch,
         <<"{\"foo\":\"30\"}">>),
     {ok, "200", ResHdr, ResBody} = ibrowse:send_req(?URL_QUEUE_PROPS(Name), [], get),
     "application/json" = proplists:get_value("content-type", ResHdr),
@@ -201,7 +201,7 @@ compound(Config) ->
     C1 = msgpack:pack({[{"testcase", "compound 1"}]}),
     C2 = <<"{\"testcase\":\"compound 2\"}">>,
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE_PROPS(Name),
-        [?CT_JSON], patch, <<"{\"accum\":0.3,\"retry\":5,\"timeout\":0}">>),
+        [?CT_JSON], patch, <<"{\"accum\":0.2,\"retry\":5,\"timeout\":0}">>),
 
     {ok, "200", _, "{\"accum\":\"new\"}"} = ibrowse:send_req(
         ?URL_QUEUE(Name), [{"content-type", "application/x-msgpack"}], post, C1),
