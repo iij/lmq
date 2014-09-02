@@ -94,6 +94,7 @@ stop(Pid) ->
 init(Name) ->
     lager:info("Starting the queue: ~s ~p", [Name, self()]),
     Props = lmq_lib:get_properties(Name),
+    lmq_hook:register(Name, proplists:get_value(hooks, Props, [])),
     %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
     ok = lmq_metrics:create_queue_metrics(Name),
@@ -115,6 +116,7 @@ handle_call(Msg, From, State) ->
 
 handle_cast(reload_properties, S) ->
     Props = lmq_lib:get_properties(S#state.name),
+    lmq_hook:register(S#state.name, proplists:get_value(hooks, Props, [])),
     lager:info("Reload queue properties: ~s ~p", [S#state.name, Props]),
     State = S#state{props=Props},
     {State1, Sleep} = prepare_sleep(State),
@@ -191,6 +193,7 @@ handle_queue_call({put_back, UUID}, _From, S=#state{}) ->
 handle_queue_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
     Props1 = lmq_lib:get_properties(S#state.name),
+    lmq_hook:register(S#state.name, proplists:get_value(hooks, Props1, [])),
     lager:info("Update queue properties: ~s ~p", [S#state.name, Props1]),
     State = S#state{props=Props1},
     {reply, ok, State};
