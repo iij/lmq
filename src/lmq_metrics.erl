@@ -35,7 +35,7 @@ update_metric(Name, List) when is_atom(Name), is_list(List) ->
     {Columns, Points} = lists:foldl(fun({Type, Value}, {Columns, Points}) ->
                         update_metric(Name, Type, Value),
                         {[Type|Columns], [Value|Points]}
-                end, {[], []}, List),
+                end, {[queue], [Name]}, List),
     influxdb_client:write(influxdb_data(stats, Columns, [Points])).
 
 update_metric(Name, retention, Time) when is_atom(Name) ->
