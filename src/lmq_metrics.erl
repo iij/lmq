@@ -24,14 +24,23 @@ create_queue_metrics(Name) when is_atom(Name) ->
 
 update_metric(Name, push) when is_atom(Name) ->
     folsom_metrics:notify({get_metric_name(Name, push), 1}),
+    influxdb_client:write(influxdb_data(rate, [queue, action, count], [[Name, push, 1]])),
     statsderl:increment(statsd_name(Name, push), 1, ?STATSD_SAMPLERATE);
 
 update_metric(Name, pull) when is_atom(Name) ->
     folsom_metrics:notify({get_metric_name(Name, pull), 1}),
-    statsderl:increment(statsd_name(Name, pull), 1, ?STATSD_SAMPLERATE).
+    influxdb_client:write(influxdb_data(rate, [queue, action, count], [[Name, pull, 1]])),
+    statsderl:increment(statsd_name(Name, pull), 1, ?STATSD_SAMPLERATE);
+update_metric(Name, List) when is_atom(Name), is_list(List) ->
+    {Columns, Points} = lists:foldl(fun({Type, Value}, {Columns, Points}) ->
+                        update_metric(Name, Type, Value),
+                        {[Type|Columns], [Value|Points]}
+                end, {[], []}, List),
+    influxdb_client:write(influxdb_data(stats, Columns, [Points])).
 
 update_metric(Name, retention, Time) when is_atom(Name) ->
     folsom_metrics:notify({get_metric_name(Name, retention), Time}),
+    influxdb_client:write(influxdb_data(stats, [queue, retention], [[Name, Time]])),
     statsderl:timing(statsd_name(Name, retention), Time, ?STATSD_SAMPLERATE);
 update_metric(Name, Type, Value) ->
     statsderl:gauge(statsd_name(Name, Type), Value, 1).
@@ -66,6 +75,9 @@ get_metric_name(Name, Type) when is_binary(Name), is_binary(Type) ->
 
 statsd_name(Name, Action) ->
     lists:flatten(io_lib:format("lmq.~s.~s", [Name, Action])).
+
+influxdb_data(Name, Columns, Points) ->
+    [[{name, Name}, {columns, Columns}, {points, Points}]].
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").

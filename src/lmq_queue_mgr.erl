@@ -150,8 +150,7 @@ handle_info(emit_stats, S=#state{}) ->
     lists:foreach(fun(Queue) ->
                           Size = mnesia:table_info(Queue, size),
                           Memory = mnesia:table_info(Queue, memory) * WordSize,
-                          lmq_metrics:update_metric(Queue, size, Size),
-                          lmq_metrics:update_metric(Queue, memory, Memory)
+                          lmq_metrics:update_metric(Queue, [{size, Size}, {memory, Memory}])
                   end, Queues),
     {noreply, S};
 handle_info(Msg, State) ->

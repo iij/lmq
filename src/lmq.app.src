@@ -23,6 +23,10 @@
   {env, [
     {port, 18800},
     {http, {"0.0.0.0", 9980}},
-    {stats_interval, 0}
+    {stats_interval, 20000},
+    {influxdb, [
+      {host, "localhost"},
+      {port, 4444}
+    ]}
   ]}
  ]}.
