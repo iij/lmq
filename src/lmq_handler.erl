@@ -39,6 +39,14 @@ handle_event({remote, {queue_created, Name}=E}, State) ->
             {ok, State}
     end;
 
+handle_event({local, {queue_deleted, _}}, State) ->
+    {ok, State};
+
+handle_event({remote, {queue_deleted, Name}}, State) ->
+    lager:debug("remote queue deleted ~s", [Name]),
+    lmq_queue_mgr:delete(Name),
+    {ok, State};
+
 handle_event(Event, State) ->
     lager:warning("Unknown event received: ~p", [Event]),
     {ok, State}.
