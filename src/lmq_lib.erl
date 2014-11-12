@@ -105,8 +105,11 @@ delete(Name) when is_atom(Name) ->
     F = fun() -> mnesia:delete(?QUEUE_INFO_TABLE, Name, write) end,
     transaction(F),
     case mnesia:delete_table(Name) of
-        {atomic, ok} -> ok;
-        {aborted, {no_exists, Name}} -> ok;
+        {atomic, ok} ->
+            lmq_event:queue_deleted(Name),
+            ok;
+        {aborted, {no_exists, Name}} ->
+            ok;
         Other ->
             lager:error("Failed to delete table '~p': ~p", [Name, Other])
     end.

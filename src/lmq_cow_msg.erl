@@ -86,7 +86,13 @@ do_push(push_all, Regexp, MD, Content, Req) ->
     end.
 
 export_push_resp({ok, L}) when is_list(L) ->
-    {[{N, export_push_resp(R)} || {N, R} <- L]};
+    L2 = lists:filtermap(fun({N, R}) ->
+                            case R of
+                                {error, _} -> false;
+                                _ -> {true, {N, export_push_resp(R)}}
+                            end
+                    end, L),
+    {L2};
 export_push_resp(ok) ->
     {[{accum, no}]};
 export_push_resp({accum, _}=R) ->
@@ -185,6 +191,13 @@ stringify_metadata([], Acc) ->
 %% ==================================================================
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
+
+export_push_resp_test_() ->
+    [?_assertEqual({[{accum, no}]}, export_push_resp(ok)),
+     ?_assertEqual({[{foo, {[{accum, no}]}}, {bar, {[{accum, no}]}}]},
+                   export_push_resp({ok, [{foo, ok}, {bar, ok}]})),
+     ?_assertEqual({[{bar, {[{accum, no}]}}]},
+                   export_push_resp({ok, [{foo, {error, no_queue_exists}}, {bar, ok}]}))].
 
 encode_body_normal_test_() ->
     Msg1 = [{id, <<"id1">>}, {content, {[{<<"content-type">>, <<"text/plain">>}], <<"msg1">>}}],

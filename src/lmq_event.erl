@@ -2,7 +2,7 @@
 
 -export([start_link/0, start_link/1, add_handler/1, add_handler/2,
     notify/1, notify_remote/2]).
--export([queue_created/1, new_message/1]).
+-export([queue_created/1, queue_deleted/1, new_message/1]).
 
 %% ==================================================================
 %% Public API
@@ -33,6 +33,9 @@ notify_remote(Node, Event) ->
 
 queue_created(Name) ->
     notify({queue_created, Name}).
+
+queue_deleted(Name) ->
+    notify({queue_deleted, Name}).
 
 new_message(QName) ->
     notify({new_message, QName}).
