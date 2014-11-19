@@ -14,7 +14,7 @@
 start(_StartType, _StartArgs) ->
     {ok, Port} = application:get_env(port),
     {ok, Http} = application:get_env(http),
-    ok = lmq_lib:init_mnesia(),
+    maybe_join(application:get_env(join)),
     R = lmq_sup:start_link(),
     start_cowboy(Http),
     {ok, _} = msgpack_rpc_server:start(?MSGPACK_SERV, tcp, lmq_api, [{port, Port}]),
@@ -45,3 +45,13 @@ start_cowboy({Ip, Port}) ->
         [{env, [{dispatch, Dispatch}]},
          {max_keepalive, 10000}]
     ).
+
+maybe_join(undefined) ->
+    ok = lmq_lib:init_mnesia();
+maybe_join({ok, Node}) ->
+    case {net_kernel:connect_node(Node), net_adm:ping(Node)} of
+        {true, pong} ->
+            rpc:call(Node, lmq_console, add_new_node, [node()]);
+        {_, pang} ->
+            ok = lmq_lib:init_mnesia()
+    end.
