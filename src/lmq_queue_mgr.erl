@@ -75,8 +75,10 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                         [] -> [];
                         Props -> lmq_misc:extend(Props, lmq_lib:queue_info(Name))
                     end,
-                    ok = lmq_queue:props(Pid, Props1),
-                    {reply, Pid, S};
+                    case lmq_queue:props(Pid, Props1) of
+                        ok -> {reply, Pid, S};
+                        _ -> {reply, error, S}
+                    end;
                 undefined ->
                     {reply, Pid, S}
             end;
