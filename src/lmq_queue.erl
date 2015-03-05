@@ -8,7 +8,7 @@
     code_change/3, terminate/2]).
 
 -include("lmq.hrl").
--record(state, {name, props, waiting=queue:new(), monitors=gb_sets:empty()}).
+-record(state, {name, props, raw_props, waiting=queue:new(), monitors=gb_sets:empty()}).
 -record(waiting, {from, ref, timeout, start_time=lmq_misc:unixtime()}).
 
 start(Name) ->
@@ -94,11 +94,12 @@ stop(Pid) ->
 init(Name) ->
     lager:info("Starting the queue: ~s ~p", [Name, self()]),
     Props = lmq_lib:get_properties(Name),
+    RawProps = lmq_lib:queue_info(Name),
     lmq_hook:register(Name, proplists:get_value(hooks, Props, [])),
     %% this is necessary when a queue restarted by supervisor
     lmq_queue_mgr:queue_started(Name, self()),
     ok = lmq_metrics:create_queue_metrics(Name),
-    {ok, #state{name=Name, props=Props}}.
+    {ok, #state{name=Name, props=Props, raw_props=RawProps}}.
 
 handle_call(stop, _From, State) ->
     lager:info("Stopping the queue: ~s ~p", [State#state.name, self()]),
@@ -190,12 +191,15 @@ handle_queue_call({put_back, UUID}, _From, S=#state{}) ->
     R = lmq_lib:put_back(S#state.name, UUID),
     {reply, R, S};
 
+handle_queue_call({props, Props}, _From, S=#state{raw_props=Props}) ->
+    lager:info("Queue property of ~s already set to ~p", [S#state.name, Props]),
+    {reply, ok, S};
 handle_queue_call({props, Props}, _From, S=#state{}) ->
     lmq_lib:update_queue_props(S#state.name, Props),
     Props1 = lmq_lib:get_properties(S#state.name),
     lmq_hook:register(S#state.name, proplists:get_value(hooks, Props1, [])),
-    lager:info("Update queue properties: ~s ~p", [S#state.name, Props1]),
-    State = S#state{props=Props1},
+    lager:info("Queue property of ~s updated to ~p", [S#state.name, Props1]),
+    State = S#state{props=Props1, raw_props=Props},
     {reply, ok, State};
 
 handle_queue_call(get_properties, _From, S) ->

@@ -76,7 +76,6 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                         Props -> lmq_misc:extend(Props, lmq_lib:queue_info(Name))
                     end,
                     ok = lmq_queue:props(Pid, Props1),
-                    lager:info("Queue properties are updated: ~s ~p", [Name, Props1]),
                     {reply, Pid, S};
                 undefined ->
                     {reply, Pid, S}
@@ -86,7 +85,7 @@ handle_call({get, Name, Opts}, _From, S=#state{}) when is_atom(Name) ->
                 true ->
                     {ok, Pid} = case proplists:get_value(props, Opts) of
                         undefined -> lmq_queue:start(Name);
-                        Props -> lmq_queue:start(Name, Props)
+                        Props -> lmq_queue:start(Name, lists:keysort(1, Props))
                     end,
                     lager:info("The new queue created: ~s ~p", [Name, Pid]),
                     {reply, Pid, update_qmap(Name, Pid, S)};
