@@ -32,9 +32,9 @@ push(Config) ->
     lmq:push(atom_to_binary(Name, latin1), <<"test 1">>),
     lmq:push(atom_to_binary(Name, latin1),
         [{<<"content-type">>, <<"text/plain">>}], <<"test 2">>),
-    [{queue, Name}, {id, _}, {type, normal},
+    [{queue, Name}, {id, _}, {type, normal}, {retry, 2},
      {content, {[], <<"test 1">>}}] = lmq:pull(Name, 0),
-    [{queue, Name}, {id, _}, {type, normal},
+    [{queue, Name}, {id, _}, {type, normal}, {retry, 2},
      {content, {[{<<"content-type">>, <<"text/plain">>}], <<"test 2">>}}]
      = lmq:pull(Name, 0).
 
@@ -45,7 +45,7 @@ pull(Config) ->
     timer:sleep(100),
     lmq:push(Name, <<"test_data">>),
     receive
-        [{queue, Name}, {id, _}, {type, normal}, {content, {[], <<"test_data">>}}] -> ok
+        [{queue, Name}, {id, _}, {type, normal}, {retry, 2}, {content, {[], <<"test_data">>}}] -> ok
     after 100 ->
         ct:fail(no_response)
     end.
@@ -54,14 +54,14 @@ update_props(Config) ->
     Name = ?config(qname, Config),
     true = is_pid(lmq:update_props(Name, [{retry, 1}, {timeout, 0}])),
     ok = lmq:push(Name, 1),
-    [{queue, Name}, {id, _}, {type, normal}, {content, {[], 1}}] = lmq:pull(Name),
-    [{queue, Name}, {id, _}, {type, normal}, {content, {[], 1}}] = lmq:pull(Name),
+    [{queue, Name}, {id, _}, {type, normal}, {retry, 1}, {content, {[], 1}}] = lmq:pull(Name),
+    [{queue, Name}, {id, _}, {type, normal}, {retry, 0}, {content, {[], 1}}] = lmq:pull(Name),
     empty = lmq:pull(Name, 0),
 
     %% change retry count
     true = is_pid(lmq:update_props(Name, [{retry, 0}])),
     ok = lmq:push(Name, 2),
-    [{queue, Name}, {id, _}, {type, normal}, {content, {[], 2}}] = lmq:pull(Name),
+    [{queue, Name}, {id, _}, {type, normal}, {retry, 0}, {content, {[], 2}}] = lmq:pull(Name),
     empty = lmq:pull(Name, 0).
 
 properties(_Config) ->

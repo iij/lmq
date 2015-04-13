@@ -65,7 +65,7 @@ handle_local_queue_created(_Config) ->
     Q3 = lmq_queue_mgr:get('lmq/mpull/c', [create]),
     lmq_queue:push(Q3, <<"push after pull">>),
 
-    receive {Ref, [{queue, 'lmq/mpull/c'}, _, _,
+    receive {Ref, [{queue, 'lmq/mpull/c'}, _, _, _,
                    {content, <<"push after pull">>}]} -> ok
     after 50 -> ct:fail(no_response)
     end.
@@ -95,7 +95,7 @@ handle_remote_queue_created(_Config) ->
     spawn(fun() -> Parent ! {Ref, lmq_mpull:pull(Pid, <<"lmq/remote/.*">>, 100)} end),
     not_found = lmq_queue_mgr:get('lmq/remote/c'),
     send_remote_event({queue_created, 'lmq/remote/c'}),
-    receive {Ref, [{queue, 'lmq/remote/c'}, _, _, {content, 1}]} -> ok
+    receive {Ref, [{queue, 'lmq/remote/c'}, _, _, _, {content, 1}]} -> ok
     after 50 -> ct:fail(no_response)
     end.
 

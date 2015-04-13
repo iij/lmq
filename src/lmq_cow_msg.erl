@@ -56,7 +56,8 @@ info({Ref, Msg}, Req, #state{ref=Ref, cf=CF}=State) ->
                       atom_to_binary(proplists:get_value(queue, Msg), latin1)},
                      {<<"x-lmq-message-id">>, proplists:get_value(id, Msg)},
                      {<<"x-lmq-message-type">>,
-                      atom_to_binary(proplists:get_value(type, Msg), latin1)}],
+                      atom_to_binary(proplists:get_value(type, Msg), latin1)},
+                     {<<"x-lmq-retry-remaining">>, integer_to_binary(proplists:get_value(retry, Msg))}],
     {ok, Req2} = cowboy_req:reply(200, Hdrs2, V, Req),
     {ok, Req2, State};
 info(_Msg, Req, State) ->

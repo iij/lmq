@@ -53,6 +53,7 @@ push_pull_ack_delete(Config) ->
     Name = proplists:get_value("x-lmq-queue-name", ResHdr2),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr2),
     "normal" = proplists:get_value("x-lmq-message-type", ResHdr2),
+    "2" = proplists:get_value("x-lmq-retry-remaining", ResHdr2),
     true = is_list(MsgId),
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ack"), [], post),
 
@@ -112,6 +113,7 @@ nack_ext(Config) ->
     {ok, "200", _, _} = ibrowse:send_req(?URL_QUEUE(Name), [?CT_JSON], post, Content),
     {ok, "200", ResHdr, Content} = ibrowse:send_req(?URL_QUEUE(Name), [], get),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
+    "1" = proplists:get_value("x-lmq-retry-remaining", ResHdr),
 
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "ext"), [], post),
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId, "nack"), [], post),
@@ -122,6 +124,7 @@ nack_ext(Config) ->
 
     {ok, "200", ResHdr2, Content} = ibrowse:send_req(?URL_QUEUE(Name) ++ "?t=0", [], get),
     MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),
+    "0" = proplists:get_value("x-lmq-retry-remaining", ResHdr2),
     {ok, "204", _, _} = ibrowse:send_req(?URL_MESSAGE(Name, MsgId2, "nack"), [], post),
     {ok, "204", _, _} = ibrowse:send_req(?URL_QUEUE(Name) ++ "?t=0", [], get).
 
@@ -196,6 +199,8 @@ multi(_Config) ->
     MsgId3 = proplists:get_value("x-lmq-message-id", ResHdr3),
     "normal" = proplists:get_value("x-lmq-message-type", ResHdr2),
     "normal" = proplists:get_value("x-lmq-message-type", ResHdr3),
+    "2" = proplists:get_value("x-lmq-retry-remaining", ResHdr2),
+    "2" = proplists:get_value("x-lmq-retry-remaining", ResHdr3),
 
     ["multi/a", "multi/b"] = lists:sort([Name2, Name3]),
     true = is_list(MsgId2),
@@ -228,6 +233,7 @@ compound(Config) ->
     Name = proplists:get_value("x-lmq-queue-name", ResHdr),
     MsgId = proplists:get_value("x-lmq-message-id", ResHdr),
     "compound" = proplists:get_value("x-lmq-message-type", ResHdr),
+    "5" = proplists:get_value("x-lmq-retry-remaining", ResHdr),
     true = "multipart/mixed; boundary=" ++ MsgId
         =:= proplists:get_value("content-type", ResHdr),
 
@@ -242,6 +248,7 @@ compound(Config) ->
     {ok, "200", ResHdr2, _} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0&cf=multipart", [], get, [], [{response_format, binary}]),
     MsgId2 = proplists:get_value("x-lmq-message-id", ResHdr2),
+    "4" = proplists:get_value("x-lmq-retry-remaining", ResHdr2),
     true = "multipart/mixed; boundary=" ++ MsgId2
         =:= proplists:get_value("content-type", ResHdr2),
 
@@ -249,6 +256,7 @@ compound(Config) ->
     {ok, "200", ResHdr3, Body3} = ibrowse:send_req(
         ?URL_QUEUE(Name) ++ "?t=0&cf=msgpack", [], get, [], [{response_format, binary}]),
     "application/x-msgpack" = proplists:get_value("content-type", ResHdr3),
+    "3" = proplists:get_value("x-lmq-retry-remaining", ResHdr3),
     {ok, [[{[{"content-type", "application/x-msgpack"}]}, C1],
           [{[{"content-type", "application/json"}]}, C2]]}
         = msgpack:unpack(Body3, [{enable_str, true}]),

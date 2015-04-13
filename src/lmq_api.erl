@@ -205,10 +205,10 @@ export_default_props([{Regexp, Props} | T], Acc) when is_list(Regexp); is_binary
 export_default_props([], Acc) ->
     lists:reverse(Acc).
 
-extract_content_value([QUEUE, ID, {type, normal}=TYPE, {content, {MD, V}}]) ->
-    [QUEUE, ID, TYPE, {content, maybe_decode(MD, V)}];
-extract_content_value([QUEUE, ID, {type, compound}=TYPE, {content, Content}]) ->
-    [QUEUE, ID, TYPE, {content, [maybe_decode(MD, V) || {MD, V} <- Content]}].
+extract_content_value([QUEUE, ID, {type, normal}=TYPE, RETRY, {content, {MD, V}}]) ->
+    [QUEUE, ID, TYPE, RETRY, {content, maybe_decode(MD, V)}];
+extract_content_value([QUEUE, ID, {type, compound}=TYPE, RETRY, {content, Content}]) ->
+    [QUEUE, ID, TYPE, RETRY, {content, [maybe_decode(MD, V) || {MD, V} <- Content]}].
 
 maybe_decode(MD, V) ->
     case proplists:get_value(<<"content-type">>, MD) of
@@ -284,12 +284,12 @@ export_message_test() ->
     M = #message{content=Ref},
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
     ?assertEqual({[{<<"id">>, UUID}, {<<"type">>, <<"normal">>},
-                   {<<"content">>, Ref}]},
+                   {<<"retry">>, 0}, {<<"content">>, Ref}]},
                  export_message(lmq_lib:export_message(M))),
 
     M2 = M#message{type=compound},
     ?assertEqual({[{<<"queue">>, <<"test">>}, {<<"id">>, UUID},
-                   {<<"type">>, <<"package">>}, {<<"content">>, Ref}]},
+                   {<<"type">>, <<"package">>}, {<<"retry">>, 0}, {<<"content">>, Ref}]},
                  export_message([{queue, test} | lmq_lib:export_message(M2)])).
 
 props_compatibility_test() ->

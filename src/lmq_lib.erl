@@ -324,7 +324,7 @@ get_props(Name, [{Regexp, Props} | T]) when is_list(Name) ->
 
 export_message(M=#message{}) ->
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
-    [{id, UUID}, {type, M#message.type}, {content, M#message.content}].
+    [{id, UUID}, {type, M#message.type}, {retry, M#message.retry}, {content, M#message.content}].
 
 %% ==================================================================
 %% EUnit tests
@@ -345,11 +345,11 @@ export_message_test() ->
     Ref = make_ref(),
     M = #message{content=Ref},
     UUID = list_to_binary(uuid:uuid_to_string(element(2, M#message.id))),
-    ?assertEqual([{id, UUID}, {type, normal}, {content, Ref}],
+    ?assertEqual([{id, UUID}, {type, normal}, {retry, 0}, {content, Ref}],
                  export_message(M)),
 
-    M2 = M#message{type=compound},
-    ?assertEqual([{id, UUID}, {type, compound}, {content, Ref}],
+    M2 = M#message{type=compound, retry=1},
+    ?assertEqual([{id, UUID}, {type, compound}, {retry, 1}, {content, Ref}],
                  export_message(M2)).
 
 -endif.
