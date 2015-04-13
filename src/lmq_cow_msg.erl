@@ -35,7 +35,7 @@ init({_, Req}, State) ->
     {shutdown, Req2, State}.
 
 handle(Req, #state{queue=Queue, push=Push}=State) ->
-    {ok, Content, Req2} = cowboy_req:body(Req),
+    {ok, Content, Req2} = fetch_body(Req, <<>>),
     {CT, Req3} = cowboy_req:header(<<"content-type">>, Req2),
     MD = case CT of
              undefined -> [];
@@ -73,6 +73,16 @@ terminate({error, _}, _Req, _State) ->
 %% ==================================================================
 %% Private functions
 %% ==================================================================
+fetch_body(Req, Acc) ->
+    case cowboy_req:body(Req) of
+        {ok, Data, Req2} ->
+            {ok, <<Acc/binary, Data/binary>>, Req2};
+        {more, Data, Req2} ->
+            fetch_body(Req2, <<Acc/binary, Data/binary>>);
+        Error ->
+            Error
+    end.
+
 do_push(push, Queue, MD, Content, Req) when is_binary(Queue) ->
     do_push(push, binary_to_atom(Queue, latin1), MD, Content, Req);
 do_push(push, Queue, MD, Content, Req) ->
