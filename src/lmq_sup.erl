@@ -29,8 +29,8 @@ init([]) ->
     Port = proplists:get_value(port, InfluxDB),
 
     {ok, {{one_for_all, 5, 10},
-          [?CHILD(lmq_queue_supersup, supervisor),
-           ?CHILD(lmq_mpull_sup, supervisor),
-           ?CHILD(lmq_event, worker),
+          [?CHILD(lmq_event, worker),
            ?CHILD(lmq_hook, worker),
+           ?CHILD(lmq_queue_supersup, supervisor),
+           ?CHILD(lmq_mpull_sup, supervisor),
            ?CHILD(influxdb_client, worker, [Host, Port])]}}.
